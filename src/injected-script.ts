@@ -29,7 +29,13 @@ export function getInjectedScript(): string {
    * @returns {string} XPath 文字列
    */
   function getXPath(el) {
-    if (!el || el.nodeType !== Node.ELEMENT_NODE) return '';
+    if (!el) return '';
+    // テキストノード等は親要素の XPath を使用する。
+    // characterData の m.target はテキストノードであり Element ではないため、
+    // そのまま処理すると常に '' を返し mutation-level の誤分類につながる。
+    if (el.nodeType !== Node.ELEMENT_NODE) {
+      return el.parentElement ? getXPath(el.parentElement) : '';
+    }
     const parts = [];
     let node = el;
     while (node && node.nodeType === Node.ELEMENT_NODE) {

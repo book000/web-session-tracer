@@ -26,8 +26,9 @@ COPY src src
 
 # pnpm store を Docker キャッシュとして保持し、パッケージダウンロードをスキップする。
 # キャッシュ ID を pnpm-hoisted とすることで、旧キャッシュ (prod のみ) との衝突を防ぐ。
+# tsx は dependencies に含まれるため --prod でインストールしても実行に必要なモジュールが揃う。
 RUN --mount=type=cache,id=pnpm-hoisted,target=/pnpm/store \
-  pnpm install --frozen-lockfile
+  pnpm install --frozen-lockfile --prod
 
 # セッションデータの保存先。ホスト側ディレクトリをマウントして永続化する。
 # docker run -v /host/sessions:/sessions ...

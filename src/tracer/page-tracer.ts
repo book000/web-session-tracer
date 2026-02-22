@@ -48,8 +48,19 @@ export class PageTracer {
   /**
    * 現在の操作ディレクトリパス。
    * NetworkTracker・MutationObserver イベントの書き込み先を示す。
+   *
+   * 非同期処理 (saveUserAction の sleep) 中に次のイベントが到着して
+   * 上書きされることを防ぐため、saveMutation は このフィールドではなく
+   * currentMutationDir を参照する。
    */
   private currentOpDir: string | null = null
+
+  /**
+   * 現在の mutation 書き込み先ディレクトリ。
+   * saveUserAction の sleep 開始時点で確定し、sleep 終了後に更新される。
+   * これにより、sleep 中に到着した mutation が確実に正しい opDir に書き込まれる。
+   */
+  private currentMutationDir: string | null = null
 
   constructor(page: Page, storage: SessionStorage, config: TracerConfig) {
     this.page = page
@@ -72,14 +83,16 @@ export class PageTracer {
     await this.networkTracker.setup(this.cdpSession)
 
     // Node.js 側のイベント受信関数をページに公開
-    await this.page.exposeFunction(
-      '__wstEvent',
-      (eventDataStr: string): void => {
+    // 既に登録済みの場合は Puppeteer がエラーをスローするため、catch して無視する
+    await this.page
+      .exposeFunction('__wstEvent', (eventDataStr: string): void => {
         this.handleInjectedEvent(eventDataStr).catch((error: unknown) => {
           console.error('[PageTracer] 注入イベント処理エラー:', error)
         })
-      }
-    )
+      })
+      .catch(() => {
+        // 同一ページへの二重登録は無視する
+      })
 
     // 新規ドキュメント読み込み時にイベント収集スクリプトを注入
     await this.page.evaluateOnNewDocument(getInjectedScript())
@@ -161,7 +174,9 @@ export class PageTracer {
       screenshotBefore = await this.takeScreenshot(opDir, 'before')
     }
 
-    // sleep 前に currentOpDir を設定し、sleep 中に到着する mutation も記録できるようにする
+    // sleep 前に currentMutationDir を設定し、sleep 中に到着する mutation も記録できるようにする。
+    // currentOpDir ではなく専用フィールドを使うことで、高速連続操作時の競合を防ぐ。
+    this.currentMutationDir = opDir
     this.currentOpDir = opDir
 
     // click / submit は DOM が落ち着くまで待機 (この間に mutation が届く)
@@ -220,7 +235,8 @@ export class PageTracer {
    * 操作ディレクトリが未設定 (操作前) の場合は破棄する。
    */
   private async saveMutation(rawChanges: RawDomChange[]): Promise<void> {
-    if (!this.currentOpDir || rawChanges.length === 0) return
+    const targetDir = this.currentMutationDir
+    if (!targetDir || rawChanges.length === 0) return
 
     const changes: DomChange[] = rawChanges.map((raw) => {
       const change: DomChange = {
@@ -249,7 +265,7 @@ export class PageTracer {
       maxLevel,
       changes,
     }
-    await this.storage.appendOpMutation(this.currentOpDir, record)
+    await this.storage.appendOpMutation(targetDir, record)
   }
 
   /**
@@ -295,6 +311,7 @@ export class PageTracer {
       await this.captureSnapshot(opDir)
       // 以降の mutation・ネットワークイベントはこのナビゲーションディレクトリに書き込む
       this.currentOpDir = opDir
+      this.currentMutationDir = opDir
     }
   }
 

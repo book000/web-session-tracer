@@ -36,24 +36,28 @@ async function main(): Promise<void> {
     await browser.disconnect()
   }
 
-  process.on('SIGINT', () => {
-    shutdown('SIGINT')
-      .catch((error: unknown) => {
-        console.error('[Main] シャットダウンエラー:', error)
-      })
-      .finally(() => {
+  // 二重シャットダウン防止フラグ
+  let shuttingDown = false
+  const handleSignal = (signal: string): void => {
+    if (shuttingDown) return
+    shuttingDown = true
+    shutdown(signal)
+      .then(() => {
+        // eslint-disable-next-line unicorn/no-process-exit
         process.exit(0)
       })
-  })
+      .catch((error: unknown) => {
+        console.error('[Main] シャットダウンエラー:', error)
+        // eslint-disable-next-line unicorn/no-process-exit
+        process.exit(1)
+      })
+  }
 
+  process.on('SIGINT', () => {
+    handleSignal('SIGINT')
+  })
   process.on('SIGTERM', () => {
-    shutdown('SIGTERM')
-      .catch((error: unknown) => {
-        console.error('[Main] シャットダウンエラー:', error)
-      })
-      .finally(() => {
-        process.exit(0)
-      })
+    handleSignal('SIGTERM')
   })
 }
 

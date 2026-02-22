@@ -33,7 +33,10 @@ export function getConfig(): TracerConfig {
   return {
     chromeUrl: process.env.CHROME_URL ?? 'http://localhost:9204',
     sessionDir: process.env.SESSION_DIR ?? './sessions',
-    networkBufferSize: Number(process.env.NETWORK_BUFFER_SIZE ?? 1000),
+    networkBufferSize: (() => {
+      const raw = Number(process.env.NETWORK_BUFFER_SIZE ?? 1000)
+      return Number.isNaN(raw) || raw <= 0 ? 1000 : raw
+    })(),
     screenshotEnabled: process.env.SCREENSHOT_ENABLED === 'true',
   }
 }

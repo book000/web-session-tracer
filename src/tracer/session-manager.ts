@@ -15,7 +15,8 @@ function pad(n: number): string {
 
 /**
  * セッション ID を生成する。
- * 形式: session-YYYYMMDD-HHmmss
+ * 形式: session-YYYYMMDD-HHmmssSSS (ミリ秒含む)
+ * 同一秒内の再起動によるディレクトリ衝突を防ぐ。
  */
 function generateSessionId(): string {
   const now = new Date()
@@ -29,7 +30,8 @@ function generateSessionId(): string {
     pad(now.getMinutes()),
     pad(now.getSeconds()),
   ].join('')
-  return `session-${datePart}-${timePart}`
+  const msPart = String(now.getMilliseconds()).padStart(3, '0')
+  return `session-${datePart}-${timePart}${msPart}`
 }
 
 /**

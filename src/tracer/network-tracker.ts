@@ -9,7 +9,7 @@ import type {
 /** リングバッファ管理用の保留中リクエスト情報 */
 interface PendingRequest {
   url: string
-  frameId: string
+  documentUrl: string
 }
 
 /**
@@ -35,6 +35,7 @@ function isoFromCdpTimestamp(cdpTimestamp: number): string {
  * - Network.requestWillBeSent (リクエスト送信)
  * - Network.responseReceived (レスポンス受信)
  * - Network.loadingFinished (ロード完了)
+ * - Network.loadingFailed (ロード失敗)
  *
  * ネットワークイベントは、発生時点の現在操作ディレクトリ (getCurrentOpDir) に
  * network.jsonl として書き込まれる。操作ディレクトリが未設定の場合は破棄する。
@@ -77,13 +78,13 @@ export class NetworkTracker {
       this.evictIfFull()
       this.pendingRequests.set(event.requestId, {
         url: event.request.url,
-        frameId: event.frameId ?? '',
+        documentUrl: event.documentURL,
       })
 
       const tracerEvent: NetworkRequestEvent = {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
-        frameUrl: event.frameId ?? '',
+        frameUrl: event.documentURL,
         timestamp: isoFromCdpTimestamp(event.timestamp),
         type: 'network_request',
         requestId: event.requestId,
@@ -98,10 +99,11 @@ export class NetworkTracker {
 
     // レスポンス受信時
     cdpSession.on('Network.responseReceived', (event) => {
+      const pending = this.pendingRequests.get(event.requestId)
       const tracerEvent: NetworkResponseEvent = {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
-        frameUrl: event.frameId ?? '',
+        frameUrl: pending?.documentUrl ?? '',
         timestamp: isoFromCdpTimestamp(event.timestamp),
         type: 'network_response',
         requestId: event.requestId,
@@ -122,7 +124,7 @@ export class NetworkTracker {
       const tracerEvent: NetworkFinishedEvent = {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
-        frameUrl: pending?.frameId ?? '',
+        frameUrl: pending?.documentUrl ?? '',
         timestamp: isoFromCdpTimestamp(event.timestamp),
         type: 'network_finished',
         requestId: event.requestId,
@@ -131,6 +133,12 @@ export class NetworkTracker {
       }
 
       this.appendToCurrentOp(tracerEvent)
+    })
+
+    // ロード失敗時 (タイムアウト・DNS 解決失敗など)
+    // pendingRequests から削除してリングバッファのスロットを解放する
+    cdpSession.on('Network.loadingFailed', (event) => {
+      this.pendingRequests.delete(event.requestId)
     })
   }
 
