@@ -160,7 +160,7 @@ export class PageTracer {
    * - click / submit: 操作「前」と「後」(500ms 待機後) の 2 枚を撮影する。
    * - keydown / input: 操作「後」(現在の入力状態) の 1 枚のみ撮影する。
    *
-   * スナップショット戦略 (SNAPSHOT_ENABLED=true 時のみ):
+   * スナップショット戦略 (FULL_SNAPSHOT_ENABLED=true 時のみ):
    * - 操作後の DOM スナップショットを snapshot.json に保存する。
    */
   private async saveUserAction(data: InjectedEvent): Promise<void> {
@@ -197,8 +197,8 @@ export class PageTracer {
       screenshotAfter = await this.takeScreenshot(opDir, 'after')
     }
 
-    // 操作後 DOM スナップショット (SNAPSHOT_ENABLED=true 時)
-    if (this.config.snapshotEnabled) {
+    // 操作後 DOM スナップショット (FULL_SNAPSHOT_ENABLED=true 時)
+    if (this.config.fullSnapshotEnabled) {
       await this.captureSnapshot(opDir)
     }
 

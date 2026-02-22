@@ -18,7 +18,7 @@ import type {
  *   ops/
  *     ev000001-main-navigation/
  *       event.json        操作イベント (整形済み JSON)
- *       snapshot.json     フル DOM スナップショット (navigation のみ、または SNAPSHOT_ENABLED=true 時)
+ *       snapshot.json     フル DOM スナップショット (navigation のみ、または FULL_SNAPSHOT_ENABLED=true 時)
  *       network.jsonl     この操作中に発生したネットワーク通信 (複数行 JSONL)
  *     ev000002-main-click/
  *       event.json
@@ -98,7 +98,7 @@ export class SessionStorage {
 
   /**
    * DOM スナップショットを snapshot.json に整形済み JSON で書き込む。
-   * ナビゲーション操作時、および SNAPSHOT_ENABLED=true 時のユーザー操作後に使用する。
+   * ナビゲーション操作時、および FULL_SNAPSHOT_ENABLED=true 時のユーザー操作後に使用する。
    * @param opDir - 操作ディレクトリの絶対パス
    * @param snapshot - DOMSnapshot.captureSnapshot の返却値
    */

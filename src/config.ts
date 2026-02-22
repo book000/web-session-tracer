@@ -25,11 +25,12 @@ export interface TracerConfig {
    */
   screenshotEnabled: boolean
   /**
-   * DOM スナップショット取得の有効/無効。
-   * 環境変数 SNAPSHOT_ENABLED で設定 (デフォルト: false)。
-   * true にすると、ナビゲーション時に加えてユーザー操作のたびに snapshot.json を保存する。
+   * 全操作へのDOM スナップショット取得の有効/無効。
+   * 環境変数 FULL_SNAPSHOT_ENABLED で設定 (デフォルト: false)。
+   * ナビゲーション時は本設定によらず常にスナップショットを取得する。
+   * true にすると、ナビゲーション時に加えてユーザー操作のたびにも snapshot.json を保存する。
    */
-  snapshotEnabled: boolean
+  fullSnapshotEnabled: boolean
 }
 
 /**
@@ -44,6 +45,6 @@ export function getConfig(): TracerConfig {
       return Number.isNaN(raw) || raw <= 0 ? 1000 : raw
     })(),
     screenshotEnabled: process.env.SCREENSHOT_ENABLED === 'true',
-    snapshotEnabled: process.env.SNAPSHOT_ENABLED === 'true',
+    fullSnapshotEnabled: process.env.FULL_SNAPSHOT_ENABLED === 'true',
   }
 }
