@@ -52,7 +52,7 @@ Recorded once at session start. Contains session-level metadata.
 {
   "sessionId": "session-20260223-020207",
   "startTime": "2026-02-22T17:02:07.294Z",
-  "chromeUrl": "http://localhost:9204"
+  "chromeUrl": "http://localhost:9222"
 }
 ```
 
@@ -70,8 +70,9 @@ One line per operation directory. Describes the triggering event.
 
 #### Navigation event
 
-Emitted when the main frame or an iframe navigates to a new URL, including SPA
-history-API transitions (`pushState` / `replaceState`).
+Emitted when the main frame or an iframe navigates to a new URL.
+Detected via Puppeteer's `framenavigated` event, which covers both cross-document
+navigations and same-document history-API transitions (`pushState` / `replaceState`).
 
 ```json
 {
@@ -223,7 +224,7 @@ that were already in-flight when the operation began.
 
 ```json
 {
-  "eventId": "session-20260223-020207-ev000002-3vntbfc",
+  "eventId": "1740274800000-3vntbfc",
   "sessionId": "session-20260223-020207",
   "frameUrl": "https://vuejs.org/",
   "timestamp": "2026-02-22T17:02:18.975Z",

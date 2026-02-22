@@ -29,7 +29,7 @@ pnpm install
 
 ```bash
 /opt/google/chrome/chrome \
-  --remote-debugging-port=9204 \
+  --remote-debugging-port=9222 \
   --user-data-dir=/tmp/chrome-wst \
   --no-first-run
 ```
@@ -43,7 +43,7 @@ pnpm start
 起動すると Chrome に接続し、セッションの記録を開始します。ブラウザを操作すると `sessions/` ディレクトリに記録が蓄積されます。停止するには `Ctrl+C` または `SIGTERM` を送信します。
 
 ```
-[Main] Chrome に接続中: http://localhost:9204
+[Main] Chrome に接続中: http://localhost:9222
 [Main] Chrome への接続成功
 [SessionManager] セッション開始: session-20260223-020207
 [SessionManager] 保存先: /path/to/sessions/session-20260223-020207
@@ -69,11 +69,11 @@ docker compose up
 services:
   tracer:
     build: .
-    network_mode: host        # ホストの Chrome (localhost:9204) に接続
+    network_mode: host        # ホストの Chrome (localhost:9222) に接続
     volumes:
       - ./sessions:/sessions  # セッションデータをホストに保存
     environment:
-      CHROME_URL: http://localhost:9204
+      CHROME_URL: http://localhost:9222
       SESSION_DIR: /sessions
 ```
 
@@ -82,7 +82,7 @@ Chrome はデフォルトで `127.0.0.1` のみでリッスンするため、コ
 別のホスト上の Chrome（`--remote-debugging-address=0.0.0.0` 付きで起動）に接続する場合は `CHROME_URL` を上書きします：
 
 ```bash
-CHROME_URL=http://192.168.1.10:9204 docker compose up
+CHROME_URL=http://192.168.1.10:9222 docker compose up
 ```
 
 ### 3. 記録の確認
@@ -97,7 +97,7 @@ ls sessions/session-*/ops/
 
 | 変数名 | デフォルト | 説明 |
 |--------|-----------|------|
-| `CHROME_URL` | `http://localhost:9204` | Chrome リモートデバッグ URL |
+| `CHROME_URL` | `http://localhost:9222` | Chrome リモートデバッグ URL |
 | `SESSION_DIR` | `./sessions` | セッションデータの保存先 |
 | `NETWORK_BUFFER_SIZE` | `1000` | メモリ上に保持する未完了リクエストの最大数 |
 | `SCREENSHOT_ENABLED` | `false` | `true` にすると操作前後のスクリーンショットを保存 |

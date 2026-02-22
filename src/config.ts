@@ -4,7 +4,7 @@
 export interface TracerConfig {
   /**
    * Chrome リモートデバッグ URL。
-   * 環境変数 CHROME_URL で設定 (デフォルト: http://localhost:9204)。
+   * 環境変数 CHROME_URL で設定 (デフォルト: http://localhost:9222)。
    */
   chromeUrl: string
   /**
@@ -31,7 +31,7 @@ export interface TracerConfig {
  */
 export function getConfig(): TracerConfig {
   return {
-    chromeUrl: process.env.CHROME_URL ?? 'http://localhost:9204',
+    chromeUrl: process.env.CHROME_URL ?? 'http://localhost:9222',
     sessionDir: process.env.SESSION_DIR ?? './sessions',
     networkBufferSize: (() => {
       const raw = Number(process.env.NETWORK_BUFFER_SIZE ?? 1000)

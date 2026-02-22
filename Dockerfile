@@ -36,8 +36,8 @@ VOLUME ["/sessions"]
 
 # Chrome のリモートデバッグ URL。Docker ネットワーク経由で接続する場合は
 # ホスト側の IP またはサービス名を指定する。
-# 例: -e CHROME_URL=http://host.docker.internal:9204
-ENV CHROME_URL=http://localhost:9204
+# 例: -e CHROME_URL=http://host.docker.internal:9222
+ENV CHROME_URL=http://localhost:9222
 ENV SESSION_DIR=/sessions
 ENV NETWORK_BUFFER_SIZE=1000
 

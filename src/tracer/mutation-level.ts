@@ -39,7 +39,9 @@ const RESOURCE_NODES = new Set(['SCRIPT', 'LINK', 'META', 'STYLE', 'NOSCRIPT'])
  * @returns &lt;head&gt; 内であれば true
  */
 function isInHead(targetPath: string): boolean {
-  return targetPath.includes('/head[') || targetPath === ''
+  // targetPath === '' は getXPath が返せなかったケース (未知ノード) であり、
+  // head 内と断定できないため判定から除外する。
+  return targetPath.includes('/head[')
 }
 
 /**

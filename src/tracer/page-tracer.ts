@@ -42,7 +42,6 @@ export class PageTracer {
   private readonly networkTracker: NetworkTracker
 
   private cdpSession: CDPSession | null = null
-  private eventCounter = 0
   private stopped = false
 
   /**
@@ -334,10 +333,10 @@ export class PageTracer {
   }
 
   /**
-   * 連番でユニークなイベント ID を生成する。
+   * セッション全体でユニークなイベント ID を生成する。
+   * 複数タブが同じ SessionStorage を共有するため、カウンタは storage 側で一元管理する。
    */
   private nextEventId(): string {
-    this.eventCounter++
-    return `${this.storage.sessionId}-ev${String(this.eventCounter).padStart(6, '0')}`
+    return this.storage.nextEventId()
   }
 }

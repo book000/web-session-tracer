@@ -35,6 +35,7 @@ export class SessionStorage {
   readonly sessionDir: string
 
   private opCount = 0
+  private eventCount = 0
   private initialized = false
 
   constructor(baseDir: string, sessionId: string) {
@@ -153,6 +154,17 @@ export class SessionStorage {
     await fs.writeFile(path.join(opDir, filename), pngData)
     const rel = path.relative(this.sessionDir, path.join(opDir, filename))
     return rel.replaceAll('\\', '/')
+  }
+
+  /**
+   * セッション全体でユニークな連番イベント ID を生成する。
+   * 複数タブ (PageTracer) が同じ SessionStorage を共有するため、
+   * カウンタをここで一元管理することで ev000001 等の衝突を防ぐ。
+   * @returns 「<sessionId>-ev<6桁連番>」形式の ID
+   */
+  nextEventId(): string {
+    this.eventCount++
+    return `${this.sessionId}-ev${String(this.eventCount).padStart(6, '0')}`
   }
 
   /** 作成済み操作ディレクトリの総数 */
