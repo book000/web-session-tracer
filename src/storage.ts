@@ -147,7 +147,7 @@ export class SessionStorage {
    * @param opDir - 操作ディレクトリの絶対パス
    * @param phase - 撮影タイミング ('before' | 'after')
    * @param pngData - PNG バイナリデータ
-   * @returns セッションディレクトリからの相対パス (例: ops/ev000002-click/before.png)
+   * @returns セッションディレクトリからの相対パス (例: ops/ev000002-main-click/before.png)
    */
   async writeOpScreenshot(
     opDir: string,
