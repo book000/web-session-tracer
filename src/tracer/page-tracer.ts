@@ -332,7 +332,7 @@ export class PageTracer {
   }
 
   /**
-   * 現在のページの DOM スナップショットを snapshot.jsonl に保存する。
+   * 現在のページの DOM スナップショットを snapshot.json に保存する。
    * @param opDir - 保存先の操作ディレクトリ
    */
   private async captureSnapshot(opDir: string): Promise<void> {

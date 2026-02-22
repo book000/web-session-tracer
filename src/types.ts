@@ -45,12 +45,12 @@ export interface UserActionEvent extends BaseTracerEvent {
   key?: string
   /**
    * 操作直前のスクリーンショット相対パス。click / submit かつ SCREENSHOT_ENABLED=true 時のみ。
-   * 例: ops/ev000002-click/before.png
+   * 例: ops/ev000002-main-click/before.png
    */
   screenshotBefore?: string
   /**
    * 操作後のスクリーンショット相対パス。SCREENSHOT_ENABLED=true 時のみ。
-   * 例: ops/ev000002-click/after.png
+   * 例: ops/ev000002-main-click/after.png
    */
   screenshotAfter?: string
 }
@@ -169,7 +169,7 @@ export interface NavigationEvent extends BaseTracerEvent {
 }
 
 /**
- * ops/ 配下の event.jsonl に保存されるイベント型のユニオン。
+ * ops/ 配下の event.json に保存されるイベント型のユニオン。
  */
 export type TracerEvent = UserActionEvent | NavigationEvent
 
