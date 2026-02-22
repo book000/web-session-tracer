@@ -154,17 +154,25 @@ export class PageTracer {
   }
 
   /**
-   * ユーザー操作イベントを ops/<eventId>-<action>/ に保存する。
+   * ユーザー操作イベントを ops/<eventId>-<frameType>-<action>/ に保存する。
    *
    * スクリーンショット戦略 (SCREENSHOT_ENABLED=true 時のみ):
    * - click / submit: 操作「前」と「後」(500ms 待機後) の 2 枚を撮影する。
    * - keydown / input: 操作「後」(現在の入力状態) の 1 枚のみ撮影する。
+   *
+   * スナップショット戦略 (SNAPSHOT_ENABLED=true 時のみ):
+   * - 操作後の DOM スナップショットを snapshot.json に保存する。
    */
   private async saveUserAction(data: InjectedEvent): Promise<void> {
     if (!data.action) return
 
     const eventId = this.nextEventId()
-    const opDir = await this.storage.createOpDir(eventId, data.action)
+    const frameType = data.frameType ?? 'main'
+    const opDir = await this.storage.createOpDir(
+      eventId,
+      frameType,
+      data.action
+    )
     const isClickLike = data.action === 'click' || data.action === 'submit'
 
     // 操作前スクリーンショット (click / submit のみ、スクリーンショット有効時)
@@ -187,6 +195,11 @@ export class PageTracer {
     let screenshotAfter: string | undefined
     if (this.config.screenshotEnabled) {
       screenshotAfter = await this.takeScreenshot(opDir, 'after')
+    }
+
+    // 操作後 DOM スナップショット (SNAPSHOT_ENABLED=true 時)
+    if (this.config.snapshotEnabled) {
+      await this.captureSnapshot(opDir)
     }
 
     const event: UserActionEvent = {
@@ -292,7 +305,11 @@ export class PageTracer {
     frameType: 'main' | 'iframe'
   ): Promise<void> {
     const eventId = this.nextEventId()
-    const opDir = await this.storage.createOpDir(eventId, 'navigation')
+    const opDir = await this.storage.createOpDir(
+      eventId,
+      frameType,
+      'navigation'
+    )
 
     const event: NavigationEvent = {
       eventId,

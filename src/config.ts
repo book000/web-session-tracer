@@ -24,6 +24,12 @@ export interface TracerConfig {
    * true にすると click / submit の前後、keydown / input の後に PNG を保存する。
    */
   screenshotEnabled: boolean
+  /**
+   * DOM スナップショット取得の有効/無効。
+   * 環境変数 SNAPSHOT_ENABLED で設定 (デフォルト: false)。
+   * true にすると、ナビゲーション時に加えてユーザー操作のたびに snapshot.json を保存する。
+   */
+  snapshotEnabled: boolean
 }
 
 /**
@@ -38,5 +44,6 @@ export function getConfig(): TracerConfig {
       return Number.isNaN(raw) || raw <= 0 ? 1000 : raw
     })(),
     screenshotEnabled: process.env.SCREENSHOT_ENABLED === 'true',
+    snapshotEnabled: process.env.SNAPSHOT_ENABLED === 'true',
   }
 }

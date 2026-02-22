@@ -27,7 +27,7 @@ export interface BaseTracerEvent {
 
 /**
  * ユーザー操作イベント。クリック・キー入力・フォーム操作を記録する。
- * ops/<eventId>-<action>/event.jsonl に 1 行で保存される。
+ * ops/<eventId>-<frameType>-<action>/event.json に整形済み JSON で保存される。
  */
 export interface UserActionEvent extends BaseTracerEvent {
   type: 'user_action'
@@ -93,7 +93,7 @@ export interface DomChange {
 }
 
 /**
- * ops/<eventId>-<action>/mutations.jsonl の 1 行に相当するレコード。
+ * ops/<eventId>-<frameType>-<action>/mutations.jsonl の 1 行に相当するレコード。
  * MutationObserver の 1 回のコールバック呼び出し分の変更をまとめたもの。
  */
 export interface OpMutationRecord {
@@ -158,7 +158,7 @@ export interface NetworkFinishedEvent extends BaseTracerEvent {
 
 /**
  * ページナビゲーションイベント。URL 変更時に記録される。
- * ops/<eventId>-navigation/event.jsonl に 1 行で保存される。
+ * ops/<eventId>-<frameType>-navigation/event.json に整形済み JSON で保存される。
  */
 export interface NavigationEvent extends BaseTracerEvent {
   type: 'navigation'
@@ -187,6 +187,8 @@ export type NetworkEvent =
 export interface InjectedEvent {
   /** イベント大分類 */
   type: 'user_action' | 'mutation'
+  /** イベント発生元フレームの種別 (main: メインフレーム, iframe: サブフレーム) */
+  frameType?: 'main' | 'iframe'
   /** ユーザー操作の種別 (user_action のみ) */
   action?: 'click' | 'keydown' | 'input' | 'submit'
   /** 対象要素のタグ名 */

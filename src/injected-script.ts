@@ -68,6 +68,9 @@ export function getInjectedScript(): string {
     }
   }
 
+  // メインフレームか iframe かを判定する
+  var frameType = window.self === window.top ? 'main' : 'iframe';
+
   // --- 古いハンドラーとオブザーバーの取り除き ---
 
   // 前回のイベントリスナーを削除
@@ -91,6 +94,7 @@ export function getInjectedScript(): string {
     if (!target || target.nodeType !== Node.ELEMENT_NODE) return;
     sendEvent({
       type: 'user_action',
+      frameType: frameType,
       action: 'click',
       tagName: target.tagName || '',
       elementId: target.id || '',
@@ -106,6 +110,7 @@ export function getInjectedScript(): string {
     var isPassword = target.type === 'password';
     sendEvent({
       type: 'user_action',
+      frameType: frameType,
       action: 'keydown',
       tagName: target.tagName || '',
       elementId: target.id || '',
@@ -122,6 +127,7 @@ export function getInjectedScript(): string {
     var isPassword = target.type === 'password';
     sendEvent({
       type: 'user_action',
+      frameType: frameType,
       action: 'input',
       tagName: target.tagName || '',
       elementId: target.id || '',
@@ -136,6 +142,7 @@ export function getInjectedScript(): string {
     if (!target) return;
     sendEvent({
       type: 'user_action',
+      frameType: frameType,
       action: 'submit',
       tagName: target.tagName || '',
       elementId: target.id || '',
