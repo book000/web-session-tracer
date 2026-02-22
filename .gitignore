@@ -148,3 +148,4 @@ vite.config.ts.timestamp-*
 data/
 sessions/session-*/
 .serena/
+.mcp.json
