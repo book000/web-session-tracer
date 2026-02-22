@@ -1,0 +1,15 @@
+services:
+  tracer:
+    build: .
+    # ホスト上の Chrome (localhost:9222) に接続するためにホストネットワークを使用する。
+    # Chrome は --remote-debugging-address=0.0.0.0 を指定しても非 headless モードでは
+    # 127.0.0.1 のみでバインドするため、host.docker.internal 経由では到達できない。
+    network_mode: host
+    volumes:
+      - ./sessions:/sessions
+    environment:
+      CHROME_URL: http://localhost:9222
+      SESSION_DIR: /sessions
+      NETWORK_BUFFER_SIZE: 1000
+      # SCREENSHOT_ENABLED: "true"
+    restart: no

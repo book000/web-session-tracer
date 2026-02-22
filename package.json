@@ -1,0 +1,45 @@
+{
+  "name": "web-session-tracer",
+  "description": "",
+  "version": "0.0.0",
+  "author": "Tomachi <tomachi@tomacheese.com>",
+  "bugs": {
+    "url": "https://github.com/book000/web-session-tracer/issues"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  },
+  "devDependencies": {
+    "@book000/eslint-config": "1.13.4",
+    "@types/node": "25.3.0",
+    "eslint": "9.39.2",
+    "eslint-config-standard": "17.1.0",
+    "eslint-plugin-import": "2.32.0",
+    "eslint-plugin-n": "17.24.0",
+    "eslint-plugin-promise": "7.2.1",
+    "prettier": "3.8.1",
+    "run-z": "2.1.0",
+    "typescript": "5.9.3"
+  },
+  "homepage": "https://github.com/book000/web-session-tracer",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "packageManager": "pnpm@9.15.4",
+  "private": true,
+  "repository": {
+    "url": "git@github.com:book000/web-session-tracer.git",
+    "type": "git"
+  },
+  "scripts": {
+    "dev": "tsx watch ./src/main.ts",
+    "fix": "run-z fix:prettier fix:eslint",
+    "fix:eslint": "eslint . -c eslint.config.mjs --fix",
+    "fix:prettier": "prettier --write src",
+    "lint": "run-z lint:prettier,lint:eslint,lint:tsc",
+    "lint:eslint": "eslint . -c eslint.config.mjs",
+    "lint:prettier": "prettier --check src",
+    "lint:tsc": "tsc",
+    "preinstall": "npx only-allow pnpm",
+    "start": "tsx ./src/main.ts"
+  }
+}
