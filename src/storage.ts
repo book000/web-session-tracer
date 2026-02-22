@@ -16,13 +16,13 @@ import type {
  * <baseDir>/<sessionId>/
  *   metadata.json
  *   ops/
- *     ev000001-navigation/
- *       event.jsonl       操作イベント (1行 compact JSON)
- *       snapshot.jsonl    フル DOM スナップショット (navigation のみ)
- *       network.jsonl     この操作中に発生したネットワーク通信
- *     ev000002-click/
- *       event.jsonl
- *       mutations.jsonl   MutationObserver 差分 (複数行)
+ *     ev000001-main-navigation/
+ *       event.json        操作イベント (整形済み JSON)
+ *       snapshot.json     フル DOM スナップショット (navigation のみ、または FULL_SNAPSHOT_ENABLED=true 時)
+ *       network.jsonl     この操作中に発生したネットワーク通信 (複数行 JSONL)
+ *     ev000002-main-click/
+ *       event.json
+ *       mutations.jsonl   MutationObserver 差分 (複数行 JSONL)
  *       network.jsonl
  *       before.png        (SCREENSHOT_ENABLED=true 時)
  *       after.png
@@ -59,15 +59,20 @@ export class SessionStorage {
 
   /**
    * 操作ディレクトリを作成して返す。
-   * ディレクトリ名は「evNNNNNN-<type>」形式 (例: ev000001-navigation)。
+   * ディレクトリ名は「evNNNNNN-<frameType>-<type>」形式 (例: ev000001-main-navigation)。
    * @param eventId - 操作イベントの ID (末尾が evNNNNNN の形式)
+   * @param frameType - フレームの種別 ('main' | 'iframe')
    * @param type - 操作種別 (navigation / click / keydown / input / submit)
    * @returns 作成した ops/<name> の絶対パス
    */
-  async createOpDir(eventId: string, type: string): Promise<string> {
+  async createOpDir(
+    eventId: string,
+    frameType: 'main' | 'iframe',
+    type: string
+  ): Promise<string> {
     this.assertInitialized()
     const evPart = /ev\d+$/.exec(eventId)?.[0] ?? eventId
-    const dirName = `${evPart}-${type}`
+    const dirName = `${evPart}-${frameType}-${type}`
     const opDir = path.join(this.sessionDir, 'ops', dirName)
     await fs.mkdir(opDir, { recursive: true })
     this.opCount++
@@ -75,7 +80,7 @@ export class SessionStorage {
   }
 
   /**
-   * 操作イベントを event.jsonl に 1 行 (compact JSON) で書き込む。
+   * 操作イベントを event.json に整形済み JSON で書き込む。
    * @param opDir - 操作ディレクトリの絶対パス
    * @param event - 保存するイベント
    */
@@ -85,23 +90,23 @@ export class SessionStorage {
   ): Promise<void> {
     this.assertInitialized()
     await fs.writeFile(
-      path.join(opDir, 'event.jsonl'),
-      JSON.stringify(event) + '\n',
+      path.join(opDir, 'event.json'),
+      JSON.stringify(event, null, 2),
       'utf8'
     )
   }
 
   /**
-   * DOM スナップショットを snapshot.jsonl に 1 行 (compact JSON) で書き込む。
-   * ナビゲーション操作のみで使用する。
+   * DOM スナップショットを snapshot.json に整形済み JSON で書き込む。
+   * ナビゲーション操作時、および FULL_SNAPSHOT_ENABLED=true 時のユーザー操作後に使用する。
    * @param opDir - 操作ディレクトリの絶対パス
    * @param snapshot - DOMSnapshot.captureSnapshot の返却値
    */
   async writeOpSnapshot(opDir: string, snapshot: unknown): Promise<void> {
     this.assertInitialized()
     await fs.writeFile(
-      path.join(opDir, 'snapshot.jsonl'),
-      JSON.stringify(snapshot) + '\n',
+      path.join(opDir, 'snapshot.json'),
+      JSON.stringify(snapshot, null, 2),
       'utf8'
     )
   }
@@ -142,7 +147,7 @@ export class SessionStorage {
    * @param opDir - 操作ディレクトリの絶対パス
    * @param phase - 撮影タイミング ('before' | 'after')
    * @param pngData - PNG バイナリデータ
-   * @returns セッションディレクトリからの相対パス (例: ops/ev000002-click/before.png)
+   * @returns セッションディレクトリからの相対パス (例: ops/ev000002-main-click/before.png)
    */
   async writeOpScreenshot(
     opDir: string,
