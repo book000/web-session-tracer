@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "puppeteer-core": "23.11.1",
-    "tsx": "^4.21.0"
+    "tsx": "4.21.0"
   },
   "devDependencies": {
     "@book000/eslint-config": "1.13.4",
