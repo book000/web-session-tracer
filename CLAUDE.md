@@ -57,8 +57,9 @@ Key facts to preserve when editing:
 ## Coding conventions
 
 - TypeScript `strict` with `noUnusedLocals`/`noUnusedParameters`/
-  `noImplicitReturns`. Import intra-project modules with the `@/*` alias where
-  it already appears; match the surrounding file otherwise.
+  `noImplicitReturns`. Intra-project imports are relative (e.g. `./types`,
+  `./tracer/session-manager`); the `@/*` alias is defined in `tsconfig.json`
+  but currently unused, so keep using relative imports to match existing files.
 - Formatting is owned by Prettier (`.prettierrc.yml`): no semicolons, single
   quotes, `es5` trailing commas, 80-col width. Do not hand-format against it;
   run `pnpm fix`.
