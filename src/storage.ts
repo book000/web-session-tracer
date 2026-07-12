@@ -13,7 +13,7 @@ import type {
  *
  * ディレクトリ構成:
  * ```
- * <baseDir>/<sessionId>/
+ * <baseDirectory>/<sessionId>/
  *   metadata.json
  *   ops/
  *     ev000001-main-navigation/
@@ -38,9 +38,9 @@ export class SessionStorage {
   private eventCount = 0
   private initialized = false
 
-  constructor(baseDir: string, sessionId: string) {
+  constructor(baseDirectory: string, sessionId: string) {
     this.sessionId = sessionId
-    this.sessionDir = path.join(baseDir, sessionId)
+    this.sessionDir = path.join(baseDirectory, sessionId)
   }
 
   /**
@@ -71,26 +71,26 @@ export class SessionStorage {
     type: string
   ): Promise<string> {
     this.assertInitialized()
-    const evPart = /ev\d+$/.exec(eventId)?.[0] ?? eventId
-    const dirName = `${evPart}-${frameType}-${type}`
-    const opDir = path.join(this.sessionDir, 'ops', dirName)
-    await fs.mkdir(opDir, { recursive: true })
+    const eventPart = /ev\d+$/.exec(eventId)?.[0] ?? eventId
+    const directoryName = `${eventPart}-${frameType}-${type}`
+    const opDirectory = path.join(this.sessionDir, 'ops', directoryName)
+    await fs.mkdir(opDirectory, { recursive: true })
     this.opCount++
-    return opDir
+    return opDirectory
   }
 
   /**
    * 操作イベントを event.json に整形済み JSON で書き込む。
-   * @param opDir - 操作ディレクトリの絶対パス
+   * @param opDirectory - 操作ディレクトリの絶対パス
    * @param event - 保存するイベント
    */
   async writeOpEvent(
-    opDir: string,
+    opDirectory: string,
     event: NavigationEvent | UserActionEvent
   ): Promise<void> {
     this.assertInitialized()
     await fs.writeFile(
-      path.join(opDir, 'event.json'),
+      path.join(opDirectory, 'event.json'),
       JSON.stringify(event, null, 2),
       'utf8'
     )
@@ -99,13 +99,13 @@ export class SessionStorage {
   /**
    * DOM スナップショットを snapshot.json に整形済み JSON で書き込む。
    * ナビゲーション操作時、および FULL_SNAPSHOT_ENABLED=true 時のユーザー操作後に使用する。
-   * @param opDir - 操作ディレクトリの絶対パス
+   * @param opDirectory - 操作ディレクトリの絶対パス
    * @param snapshot - DOMSnapshot.captureSnapshot の返却値
    */
-  async writeOpSnapshot(opDir: string, snapshot: unknown): Promise<void> {
+  async writeOpSnapshot(opDirectory: string, snapshot: unknown): Promise<void> {
     this.assertInitialized()
     await fs.writeFile(
-      path.join(opDir, 'snapshot.json'),
+      path.join(opDirectory, 'snapshot.json'),
       JSON.stringify(snapshot, null, 2),
       'utf8'
     )
@@ -113,16 +113,16 @@ export class SessionStorage {
 
   /**
    * MutationObserver の変更バッチを mutations.jsonl に 1 行追記する。
-   * @param opDir - 操作ディレクトリの絶対パス
+   * @param opDirectory - 操作ディレクトリの絶対パス
    * @param record - 変更バッチレコード
    */
   async appendOpMutation(
-    opDir: string,
+    opDirectory: string,
     record: OpMutationRecord
   ): Promise<void> {
     this.assertInitialized()
     await fs.appendFile(
-      path.join(opDir, 'mutations.jsonl'),
+      path.join(opDirectory, 'mutations.jsonl'),
       JSON.stringify(record) + '\n',
       'utf8'
     )
@@ -130,13 +130,16 @@ export class SessionStorage {
 
   /**
    * ネットワークイベントを network.jsonl に 1 行追記する。
-   * @param opDir - 操作ディレクトリの絶対パス
+   * @param opDirectory - 操作ディレクトリの絶対パス
    * @param event - 保存するネットワークイベント
    */
-  async appendOpNetwork(opDir: string, event: NetworkEvent): Promise<void> {
+  async appendOpNetwork(
+    opDirectory: string,
+    event: NetworkEvent
+  ): Promise<void> {
     this.assertInitialized()
     await fs.appendFile(
-      path.join(opDir, 'network.jsonl'),
+      path.join(opDirectory, 'network.jsonl'),
       JSON.stringify(event) + '\n',
       'utf8'
     )
@@ -144,21 +147,24 @@ export class SessionStorage {
 
   /**
    * スクリーンショットを PNG ファイルとして保存する。
-   * @param opDir - 操作ディレクトリの絶対パス
+   * @param opDirectory - 操作ディレクトリの絶対パス
    * @param phase - 撮影タイミング ('before' | 'after')
    * @param pngData - PNG バイナリデータ
    * @returns セッションディレクトリからの相対パス (例: ops/ev000002-main-click/before.png)
    */
   async writeOpScreenshot(
-    opDir: string,
+    opDirectory: string,
     phase: 'before' | 'after',
     pngData: Buffer
   ): Promise<string> {
     this.assertInitialized()
     const filename = `${phase}.png`
-    await fs.writeFile(path.join(opDir, filename), pngData)
-    const rel = path.relative(this.sessionDir, path.join(opDir, filename))
-    return rel.replaceAll('\\', '/')
+    await fs.writeFile(path.join(opDirectory, filename), pngData)
+    const relative = path.relative(
+      this.sessionDir,
+      path.join(opDirectory, filename)
+    )
+    return relative.replaceAll('\\', '/')
   }
 
   /**

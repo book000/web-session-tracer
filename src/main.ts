@@ -37,20 +37,21 @@ async function main(): Promise<void> {
   }
 
   // 二重シャットダウン防止フラグ
-  let shuttingDown = false
+  let isShuttingDown = false
   const handleSignal = (signal: string): void => {
-    if (shuttingDown) return
-    shuttingDown = true
-    shutdown(signal)
-      .then(() => {
+    if (isShuttingDown) return
+    isShuttingDown = true
+    ;(async () => {
+      try {
+        await shutdown(signal)
         // eslint-disable-next-line unicorn/no-process-exit
         process.exit(0)
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         console.error('[Main] シャットダウンエラー:', error)
         // eslint-disable-next-line unicorn/no-process-exit
         process.exit(1)
-      })
+      }
+    })()
   }
 
   process.on('SIGINT', () => {
@@ -61,8 +62,12 @@ async function main(): Promise<void> {
   })
 }
 
-main().catch((error: unknown) => {
-  console.error('[Main] 致命的エラー:', error)
-  // eslint-disable-next-line unicorn/no-process-exit
-  process.exit(1)
-})
+;(async () => {
+  try {
+    await main()
+  } catch (error: unknown) {
+    console.error('[Main] 致命的エラー:', error)
+    // eslint-disable-next-line unicorn/no-process-exit
+    process.exit(1)
+  }
+})()

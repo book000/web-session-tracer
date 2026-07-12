@@ -88,12 +88,16 @@ export class SessionManager {
     // 新規タブの監視
     this.browser.on('targetcreated', (target: Target) => {
       if (target.type() === TargetType.PAGE) {
-        this.attachToTarget(target).catch((error: unknown) => {
-          console.error(
-            '[SessionManager] 新規ターゲットへのアタッチに失敗:',
-            error
-          )
-        })
+        ;(async () => {
+          try {
+            await this.attachToTarget(target)
+          } catch (error: unknown) {
+            console.error(
+              '[SessionManager] 新規ターゲットへのアタッチに失敗:',
+              error
+            )
+          }
+        })()
       }
     })
 
@@ -101,9 +105,13 @@ export class SessionManager {
     this.browser.on('targetdestroyed', (target: Target) => {
       const tracer = this.pageTracers.get(target)
       if (tracer) {
-        tracer.stop().catch((error: unknown) => {
-          console.error('[SessionManager] PageTracer 停止エラー:', error)
-        })
+        ;(async () => {
+          try {
+            await tracer.stop()
+          } catch (error: unknown) {
+            console.error('[SessionManager] PageTracer 停止エラー:', error)
+          }
+        })()
         this.pageTracers.delete(target)
       }
     })
@@ -117,11 +125,13 @@ export class SessionManager {
     this.running = false
 
     await Promise.all(
-      [...this.pageTracers.values()].map((tracer) =>
-        tracer.stop().catch((error: unknown) => {
+      this.pageTracers.values().map(async (tracer) => {
+        try {
+          await tracer.stop()
+        } catch (error: unknown) {
           console.error('[SessionManager] PageTracer 停止エラー:', error)
-        })
-      )
+        }
+      })
     )
     this.pageTracers.clear()
 

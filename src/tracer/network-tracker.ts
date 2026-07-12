@@ -37,7 +37,7 @@ function isoFromCdpTimestamp(cdpTimestamp: number): string {
  * - Network.loadingFinished (ロード完了)
  * - Network.loadingFailed (ロード失敗)
  *
- * ネットワークイベントは、発生時点の現在操作ディレクトリ (getCurrentOpDir) に
+ * ネットワークイベントは、発生時点の現在操作ディレクトリ (getCurrentOpDirectory) に
  * network.jsonl として書き込まれる。操作ディレクトリが未設定の場合は破棄する。
  *
  * 内部でリングバッファを使用して、未完了リクエストのメモリ使用量を制限する。
@@ -45,22 +45,22 @@ function isoFromCdpTimestamp(cdpTimestamp: number): string {
 export class NetworkTracker {
   private readonly storage: SessionStorage
   private readonly bufferSize: number
-  private readonly getCurrentOpDir: () => string | null
+  private readonly getCurrentOpDirectory: () => string | null
   private readonly pendingRequests = new Map<string, PendingRequest>()
 
   /**
    * @param storage - セッションストレージ
    * @param bufferSize - リングバッファの最大サイズ
-   * @param getCurrentOpDir - 現在の操作ディレクトリパスを返す関数。未設定時は null
+   * @param getCurrentOpDirectory - 現在の操作ディレクトリパスを返す関数。未設定時は null
    */
   constructor(
     storage: SessionStorage,
     bufferSize: number,
-    getCurrentOpDir: () => string | null
+    getCurrentOpDirectory: () => string | null
   ) {
     this.storage = storage
     this.bufferSize = bufferSize
-    this.getCurrentOpDir = getCurrentOpDir
+    this.getCurrentOpDirectory = getCurrentOpDirectory
   }
 
   /**
@@ -90,7 +90,7 @@ export class NetworkTracker {
         requestId: event.requestId,
         url: event.request.url,
         method: event.request.method,
-        headers: event.request.headers as Record<string, string>,
+        headers: event.request.headers,
         postData: event.request.postData,
       }
 
@@ -110,7 +110,7 @@ export class NetworkTracker {
         url: event.response.url,
         status: event.response.status,
         mimeType: event.response.mimeType,
-        headers: event.response.headers as Record<string, string>,
+        headers: event.response.headers,
       }
 
       this.appendToCurrentOp(tracerEvent)
@@ -149,22 +149,28 @@ export class NetworkTracker {
   private appendToCurrentOp(
     event: NetworkRequestEvent | NetworkResponseEvent | NetworkFinishedEvent
   ): void {
-    const opDir = this.getCurrentOpDir()
-    if (!opDir) return
-    this.storage.appendOpNetwork(opDir, event).catch((error: unknown) => {
-      console.error('[NetworkTracker] ネットワークイベント保存エラー:', error)
-    })
+    const opDirectory = this.getCurrentOpDirectory()
+    if (!opDirectory) return
+    ;(async () => {
+      try {
+        await this.storage.appendOpNetwork(opDirectory, event)
+      } catch (error: unknown) {
+        console.error('[NetworkTracker] ネットワークイベント保存エラー:', error)
+      }
+    })()
   }
 
   /**
    * バッファが上限に達している場合、最古のエントリを削除する (リングバッファ)。
    */
   private evictIfFull(): void {
-    if (this.pendingRequests.size >= this.bufferSize) {
-      const firstKey = this.pendingRequests.keys().next().value
-      if (firstKey !== undefined) {
-        this.pendingRequests.delete(firstKey)
-      }
+    if (this.pendingRequests.size < this.bufferSize) {
+      return
+    }
+
+    const firstKey = this.pendingRequests.keys().next().value
+    if (firstKey !== undefined) {
+      this.pendingRequests.delete(firstKey)
     }
   }
 }
