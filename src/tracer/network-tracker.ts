@@ -91,6 +91,8 @@ export class NetworkTracker {
         url: event.request.url,
         method: event.request.method,
         headers: event.request.headers as Record<string, string>,
+        // postDataEntries (base64) への移行は記録フォーマット互換性に影響するため見送り、非推奨警告のみ抑止する
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
         postData: event.request.postData,
       }
 
