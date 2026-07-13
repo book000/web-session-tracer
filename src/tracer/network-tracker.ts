@@ -90,7 +90,7 @@ export class NetworkTracker {
         requestId: event.requestId,
         url: event.request.url,
         method: event.request.method,
-        headers: event.request.headers as Record<string, string>,
+        headers: event.request.headers,
         // postDataEntries (base64) への移行は記録フォーマット互換性に影響するため見送り、非推奨警告のみ抑止する
         // eslint-disable-next-line @typescript-eslint/no-deprecated
         postData: event.request.postData,
@@ -112,7 +112,7 @@ export class NetworkTracker {
         url: event.response.url,
         status: event.response.status,
         mimeType: event.response.mimeType,
-        headers: event.response.headers as Record<string, string>,
+        headers: event.response.headers,
       }
 
       this.appendToCurrentOp(tracerEvent)
@@ -162,11 +162,13 @@ export class NetworkTracker {
    * バッファが上限に達している場合、最古のエントリを削除する (リングバッファ)。
    */
   private evictIfFull(): void {
-    if (this.pendingRequests.size >= this.bufferSize) {
-      const firstKey = this.pendingRequests.keys().next().value
-      if (firstKey !== undefined) {
-        this.pendingRequests.delete(firstKey)
-      }
+    if (this.pendingRequests.size < this.bufferSize) {
+      return
+    }
+
+    const firstKey = this.pendingRequests.keys().next().value
+    if (firstKey !== undefined) {
+      this.pendingRequests.delete(firstKey)
     }
   }
 }

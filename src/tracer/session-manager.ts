@@ -117,7 +117,7 @@ export class SessionManager {
     this.running = false
 
     await Promise.all(
-      [...this.pageTracers.values()].map((tracer) =>
+      this.pageTracers.values().map((tracer) =>
         tracer.stop().catch((error: unknown) => {
           console.error('[SessionManager] PageTracer 停止エラー:', error)
         })
