@@ -177,9 +177,7 @@ export type TracerEvent = UserActionEvent | NavigationEvent
  * network.jsonl に保存されるネットワークイベント型のユニオン。
  */
 export type NetworkEvent =
-  | NetworkRequestEvent
-  | NetworkResponseEvent
-  | NetworkFinishedEvent
+  NetworkRequestEvent | NetworkResponseEvent | NetworkFinishedEvent
 
 /**
  * ページに注入したスクリプトから Node.js へ送信されるイベントデータ。
