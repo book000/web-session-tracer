@@ -21,7 +21,7 @@ WORKDIR /app
 # node-linker=hoisted でファイルをコピーする方式に切り替える。
 RUN echo "node-linker=hoisted" >> .npmrc
 
-COPY package.json pnpm-lock.yaml tsconfig.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY src src
 
 # pnpm store を Docker キャッシュとして保持し、パッケージダウンロードをスキップする。
