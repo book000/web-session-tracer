@@ -100,12 +100,14 @@ export class SessionManager {
     // タブ閉鎖の監視
     this.browser.on('targetdestroyed', (target: Target) => {
       const tracer = this.pageTracers.get(target)
-      if (tracer) {
-        tracer.stop().catch((error: unknown) => {
-          console.error('[SessionManager] PageTracer 停止エラー:', error)
-        })
-        this.pageTracers.delete(target)
+      if (!tracer) {
+        return
       }
+
+      tracer.stop().catch((error: unknown) => {
+        console.error('[SessionManager] PageTracer 停止エラー:', error)
+      })
+      this.pageTracers.delete(target)
     })
   }
 

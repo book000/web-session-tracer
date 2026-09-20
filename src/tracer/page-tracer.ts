@@ -124,10 +124,12 @@ export class PageTracer {
    */
   async stop(): Promise<void> {
     this.stopped = true
-    if (this.cdpSession) {
-      await this.cdpSession.detach().catch(() => undefined)
-      this.cdpSession = null
+    if (!this.cdpSession) {
+      return
     }
+
+    await this.cdpSession.detach().catch(() => undefined)
+    this.cdpSession = null
   }
 
   // ---------- プライベートメソッド ----------
@@ -255,15 +257,19 @@ export class PageTracer {
         mutationType: raw.mutationType as DomChange['mutationType'],
         targetPath: raw.targetPath,
         level: computeChangeLevel(raw),
+        ...(raw.addedNodes.length > 0 && { addedNodes: raw.addedNodes }),
+        ...(raw.removedNodes.length > 0 && {
+          removedNodes: raw.removedNodes,
+        }),
+        ...(raw.attributeName !== null && {
+          attributeName: raw.attributeName,
+          attributeValue: raw.attributeValue,
+          oldValue: raw.oldValue,
+        }),
+        ...(raw.characterData !== null && {
+          characterData: raw.characterData,
+        }),
       }
-      if (raw.addedNodes.length > 0) change.addedNodes = raw.addedNodes
-      if (raw.removedNodes.length > 0) change.removedNodes = raw.removedNodes
-      if (raw.attributeName !== null) {
-        change.attributeName = raw.attributeName
-        change.attributeValue = raw.attributeValue
-        change.oldValue = raw.oldValue
-      }
-      if (raw.characterData !== null) change.characterData = raw.characterData
       return change
     })
 
@@ -322,13 +328,15 @@ export class PageTracer {
     }
     await this.storage.writeOpEvent(opDir, event)
 
-    if (frameType === 'main') {
-      // ナビゲーション後の DOM スナップショットをベースラインとして保存
-      await this.captureSnapshot(opDir)
-      // 以降の mutation・ネットワークイベントはこのナビゲーションディレクトリに書き込む
-      this.currentOpDir = opDir
-      this.currentMutationDir = opDir
+    if (frameType !== 'main') {
+      return
     }
+
+    // ナビゲーション後の DOM スナップショットをベースラインとして保存
+    await this.captureSnapshot(opDir)
+    // 以降の mutation・ネットワークイベントはこのナビゲーションディレクトリに書き込む
+    this.currentOpDir = opDir
+    this.currentMutationDir = opDir
   }
 
   /**
