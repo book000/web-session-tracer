@@ -11,7 +11,7 @@
     "tsx": "4.23.15"
   },
   "devDependencies": {
-    "@book000/eslint-config": "1.16.73",
+    "@book000/eslint-config": "1.16.74",
     "@types/node": "25.9.8",
     "eslint": "10.11.0",
     "eslint-config-standard": "17.1.0",
