@@ -220,6 +220,14 @@ types are recorded for each HTTP request.
 **Note**: `frameUrl` may be a CDP internal hash string rather than a URL for requests
 that were already in-flight when the operation began.
 
+**Note**: `timestamp` is the wall-clock time (ISO 8601 UTC, millisecond precision)
+derived from the CDP `wallTime` of the request's `requestWillBeSent`. The response and
+finished events of a request use that request's own offset, or the latest known offset
+of the same CDP session when the request itself was not observed. If no reference is
+known yet (for example, requests already in-flight when tracing started), the time the
+event was received by Node.js is recorded instead, so such events may deviate slightly
+from the true time.
+
 #### `network_request`
 
 ```json

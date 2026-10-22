@@ -6,10 +6,28 @@ import type {
   NetworkResponseEvent,
 } from '../types'
 
+/** Date が表現できる Unix 時刻の最大値 (秒) */
+const MAX_EPOCH_SECONDS = 8.64e12
+
+/**
+ * CDP セッションごとの時刻換算状態。
+ * setup() の呼び出しごとに 1 つ作られ、そのオブジェクトの同一性をセッションの識別子として使う。
+ */
+interface SessionClock {
+  /** 直近に取得できた wallTime - timestamp (秒)。未取得の間は null */
+  latestOffset: number | null
+  /** 基準を取得できなかった旨の警告を出力済みか */
+  warned: boolean
+}
+
 /** リングバッファ管理用の保留中リクエスト情報 */
 interface PendingRequest {
   url: string
   documentUrl: string
+  /** このリクエスト自身の requestWillBeSent から求めた wallTime - timestamp (秒)。求められなかった場合は null */
+  clockOffset: number | null
+  /** このエントリを登録した setup() の SessionClock */
+  owner: SessionClock
 }
 
 /**
@@ -21,11 +39,31 @@ function generateEventId(): string {
 }
 
 /**
- * CDP のタイムスタンプ (Unix 秒) を ISO 8601 文字列に変換する。
- * @param cdpTimestamp - CDP から受け取った秒単位のタイムスタンプ
+ * Unix 時刻 (秒) をミリ秒に丸めた ISO 8601 文字列に変換する。
+ * Date で表現できない値 (非有限値を含む) の場合は null を返す。
+ * @param seconds - Unix 時刻 (秒)
  */
-function isoFromCdpTimestamp(cdpTimestamp: number): string {
-  return new Date(cdpTimestamp * 1000).toISOString()
+function isoFromEpochSeconds(seconds: number): string | null {
+  const date = new Date(Math.round(seconds * 1000))
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/**
+ * CDP の MonotonicTime (timestamp) を Unix 時刻へ換算するためのオフセット (秒) を求める。
+ * 換算に使えない値の場合は null を返す。
+ * @param timestamp - CDP の MonotonicTime (秒)
+ * @param wallTime - 同じ時点の Unix 時刻 (秒)
+ */
+function clockOffsetFromCdp(
+  timestamp: number,
+  wallTime: number
+): number | null {
+  const offset = wallTime - timestamp
+  return Number.isFinite(offset) &&
+    Math.abs(offset) <= MAX_EPOCH_SECONDS &&
+    isoFromEpochSeconds(wallTime) !== null
+    ? offset
+    : null
 }
 
 /**
@@ -39,6 +77,9 @@ function isoFromCdpTimestamp(cdpTimestamp: number): string {
  *
  * ネットワークイベントは、発生時点の現在操作ディレクトリ (getCurrentOpDir) に
  * network.jsonl として書き込まれる。操作ディレクトリが未設定の場合は破棄する。
+ *
+ * CDP の timestamp は単調増加時計 (MonotonicTime) の値であり、Unix 時刻ではない。
+ * requestWillBeSent の wallTime との差 (オフセット) で Unix 時刻へ換算して記録する。
  *
  * 内部でリングバッファを使用して、未完了リクエストのメモリ使用量を制限する。
  */
@@ -73,19 +114,52 @@ export class NetworkTracker {
       maxPostDataSize: 65_536,
     })
 
+    const clock: SessionClock = { latestOffset: null, warned: false }
+
+    const resolveTimestamp = (
+      timestamp: number,
+      offset: number | null
+    ): string => {
+      const iso =
+        offset === null ? null : isoFromEpochSeconds(timestamp + offset)
+      if (iso !== null) {
+        return iso
+      }
+
+      // Network.enable 前から進行中のリクエストなどは換算の基準がないため、受信時刻で代替する
+      if (!clock.warned) {
+        clock.warned = true
+        console.warn(
+          '[NetworkTracker] CDP の時刻基準 (wallTime) が未取得または不正なため、受信時刻で代替します'
+        )
+      }
+      return new Date().toISOString()
+    }
+
+    const offsetFor = (pending: PendingRequest | undefined): number | null =>
+      (pending?.owner === clock ? pending.clockOffset : null) ??
+      clock.latestOffset
+
     // リクエスト送信時
     cdpSession.on('Network.requestWillBeSent', (event) => {
+      const offset = clockOffsetFromCdp(event.timestamp, event.wallTime)
+      if (offset !== null) {
+        clock.latestOffset = offset
+      }
+
       this.evictIfFull()
       this.pendingRequests.set(event.requestId, {
         url: event.request.url,
         documentUrl: event.documentURL,
+        clockOffset: offset,
+        owner: clock,
       })
 
       const tracerEvent: NetworkRequestEvent = {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
         frameUrl: event.documentURL,
-        timestamp: isoFromCdpTimestamp(event.timestamp),
+        timestamp: resolveTimestamp(event.timestamp, clock.latestOffset),
         type: 'network_request',
         requestId: event.requestId,
         url: event.request.url,
@@ -106,7 +180,7 @@ export class NetworkTracker {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
         frameUrl: pending?.documentUrl ?? '',
-        timestamp: isoFromCdpTimestamp(event.timestamp),
+        timestamp: resolveTimestamp(event.timestamp, offsetFor(pending)),
         type: 'network_response',
         requestId: event.requestId,
         url: event.response.url,
@@ -127,7 +201,7 @@ export class NetworkTracker {
         eventId: generateEventId(),
         sessionId: this.storage.sessionId,
         frameUrl: pending?.documentUrl ?? '',
-        timestamp: isoFromCdpTimestamp(event.timestamp),
+        timestamp: resolveTimestamp(event.timestamp, offsetFor(pending)),
         type: 'network_finished',
         requestId: event.requestId,
         url: pending?.url ?? '',
