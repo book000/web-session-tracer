@@ -50,6 +50,10 @@ Key facts to preserve when editing:
   `window.__wstObserver` so multiple sessions don't stack listeners.
 - Event IDs are allocated centrally by `SessionStorage.nextEventId()` because
   multiple tabs share one storage; do not generate IDs per-page.
+- CDP `Network.*` event `timestamp` values are `MonotonicTime` (a monotonic
+  clock with an arbitrary origin), not Unix time. `NetworkTracker` converts
+  them with the `wallTime - timestamp` offset taken from `requestWillBeSent`;
+  never use `new Date(timestamp * 1000)`.
 - Op directory names are `ev<6-digit>-<frameType>-<type>` (e.g.
   `ev000001-main-navigation`). `event.json`/`snapshot.json` are pretty JSON;
   `mutations.jsonl`/`network.jsonl` are append-only JSONL.
