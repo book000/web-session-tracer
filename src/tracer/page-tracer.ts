@@ -14,26 +14,23 @@ import type {
 import { computeChangeLevel } from './mutation-level'
 import { NetworkTracker } from './network-tracker'
 
-/**
- * 指定ミリ秒待機する。
- * @param ms - 待機時間 (ミリ秒)
- */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /**
- * 1 ページ (タブ) のトレースを担当するクラス。
+ * Traces a single page (tab).
  *
- * 担当範囲:
- * - ネットワーク追跡 (NetworkTracker 経由)
- * - ユーザー操作イベントの収集 (exposeFunction + 注入スクリプト)
- * - DOM 変更の収集 (MutationObserver → ops/<id>/mutations.jsonl)
- * - ページナビゲーションの記録と DOM スナップショット取得
- * - スクリーンショットの撮影 (SCREENSHOT_ENABLED=true 時のみ)
+ * Responsibilities:
+ * - Network tracking (through NetworkTracker)
+ * - Collecting user action events (exposeFunction + injected script)
+ * - Collecting DOM changes (MutationObserver -> `mutations.jsonl` in the operation directory)
+ * - Recording page navigations and capturing DOM snapshots
+ * - Taking screenshots (only when SCREENSHOT_ENABLED=true)
  *
- * 各操作は ops/<eventId>-<type>/ ディレクトリに独立して保存される。
- * ネットワーク・Mutation イベントは発生時点の現在操作ディレクトリに追記される。
+ * Each operation is saved independently in an `ops/<evNNNNNN>-<frameType>-<type>/` directory.
+ * Network and mutation events are appended to the current operation directory
+ * at the time they occur.
  */
 export class PageTracer {
   private readonly page: Page
@@ -45,20 +42,12 @@ export class PageTracer {
   private stopped = false
 
   /**
-   * 現在の操作ディレクトリパス。
-   * NetworkTracker・MutationObserver イベントの書き込み先を示す。
-   *
-   * 非同期処理 (saveUserAction の sleep) 中に次のイベントが到着して
-   * 上書きされることを防ぐため、saveMutation は このフィールドではなく
-   * currentMutationDir を参照する。
+   * Current operation directory, where network events are written.
+   * Set together with currentMutationDir to the newest operation's directory.
    */
   private currentOpDir: string | null = null
 
-  /**
-   * 現在の mutation 書き込み先ディレクトリ。
-   * saveUserAction の sleep 開始時点で確定し、sleep 終了後に更新される。
-   * これにより、sleep 中に到着した mutation が確実に正しい opDir に書き込まれる。
-   */
+  /** Current operation directory, where DOM mutations are written. */
   private currentMutationDir: string | null = null
 
   constructor(page: Page, storage: SessionStorage, config: TracerConfig) {
@@ -72,56 +61,44 @@ export class PageTracer {
     )
   }
 
-  /**
-   * ページのトレースを開始する。
-   * CDP セッション作成・イベントリスナー設定・スクリプト注入を行う。
-   */
   async start(): Promise<void> {
-    // CDP セッションを作成してネットワーク追跡を設定
     this.cdpSession = await this.page.createCDPSession()
     await this.networkTracker.setup(this.cdpSession)
 
-    // Node.js 側のイベント受信関数をページに公開
-    // 既に登録済みの場合は Puppeteer がエラーをスローするため、catch して無視する
     await this.page
       .exposeFunction('__wstEvent', (eventDataStr: string): void => {
         this.handleInjectedEvent(eventDataStr).catch((error: unknown) => {
-          console.error('[PageTracer] 注入イベント処理エラー:', error)
+          console.error('[PageTracer] Injected event handling error:', error)
         })
       })
       .catch(() => {
-        // 同一ページへの二重登録は無視する
+        // Puppeteer throws if __wstEvent is already registered on this page
       })
 
-    // 新規ドキュメント読み込み時にイベント収集スクリプトを注入
     await this.page.evaluateOnNewDocument(getInjectedScript())
 
-    // すでに読み込み済みのページにもスクリプトを実行
+    // Also run the script on the page that is already loaded
     try {
       await this.page.evaluate(getInjectedScript())
     } catch {
-      // ナビゲーション中などで評価できない場合は無視
+      // Ignore failures to evaluate, e.g. during a navigation
     }
 
-    // フレームナビゲーションを監視
     this.page.on('framenavigated', (frame: Frame) => {
       this.handleNavigation(frame).catch((error: unknown) => {
-        console.error('[PageTracer] ナビゲーション処理エラー:', error)
+        console.error('[PageTracer] Navigation handling error:', error)
       })
     })
 
-    // 現在のメインフレームを初期ナビゲーションとして記録
+    // Record the current main frame as the initial navigation
     const currentUrl = this.page.mainFrame().url()
     if (currentUrl && currentUrl !== 'about:blank') {
       await this.recordNavigation(currentUrl, 'main')
     }
 
-    console.log(`[PageTracer] トレース開始: ${this.page.url()}`)
+    console.log(`[PageTracer] Tracing started: ${this.page.url()}`)
   }
 
-  /**
-   * ページのトレースを停止し、CDP セッションをデタッチする。
-   */
   async stop(): Promise<void> {
     this.stopped = true
     if (!this.cdpSession) {
@@ -132,11 +109,6 @@ export class PageTracer {
     this.cdpSession = null
   }
 
-  // ---------- プライベートメソッド ----------
-
-  /**
-   * 注入スクリプトから受け取った JSON 文字列をパースして処理する。
-   */
   private async handleInjectedEvent(eventDataStr: string): Promise<void> {
     if (this.stopped) return
 
@@ -144,7 +116,10 @@ export class PageTracer {
     try {
       data = JSON.parse(eventDataStr) as InjectedEvent
     } catch {
-      console.error('[PageTracer] イベント JSON パース失敗:', eventDataStr)
+      console.error(
+        '[PageTracer] Failed to parse the event JSON:',
+        eventDataStr
+      )
       return
     }
 
@@ -156,14 +131,14 @@ export class PageTracer {
   }
 
   /**
-   * ユーザー操作イベントを ops/<eventId>-<frameType>-<action>/ に保存する。
+   * Saves a user action event in `ops/<evNNNNNN>-<frameType>-<action>/`.
    *
-   * スクリーンショット戦略 (SCREENSHOT_ENABLED=true 時のみ):
-   * - click / submit: 操作「前」と「後」(500ms 待機後) の 2 枚を撮影する。
-   * - keydown / input: 操作「後」(現在の入力状態) の 1 枚のみ撮影する。
+   * Screenshot strategy (only when SCREENSHOT_ENABLED=true):
+   * - click / submit: take two, one before and one after the action (after the DOM settles).
+   * - keydown / input: take only one, after the action (the current input state).
    *
-   * スナップショット戦略 (FULL_SNAPSHOT_ENABLED=true 時のみ):
-   * - 操作後の DOM スナップショットを snapshot.json に保存する。
+   * Snapshot strategy (only when FULL_SNAPSHOT_ENABLED=true):
+   * - Save the DOM snapshot after the action to `snapshot.json`.
    */
   private async saveUserAction(data: InjectedEvent): Promise<void> {
     if (!data.action) return
@@ -177,29 +152,26 @@ export class PageTracer {
     )
     const isClickLike = data.action === 'click' || data.action === 'submit'
 
-    // 操作前スクリーンショット (click / submit のみ、スクリーンショット有効時)
     let screenshotBefore: string | undefined
     if (isClickLike && this.config.screenshotEnabled) {
       screenshotBefore = await this.takeScreenshot(opDir, 'before')
     }
 
-    // sleep 前に currentMutationDir を設定し、sleep 中に到着する mutation も記録できるようにする。
-    // currentOpDir ではなく専用フィールドを使うことで、高速連続操作時の競合を防ぐ。
+    // Set before the sleep so mutations and network events that arrive during
+    // it are recorded under this operation.
     this.currentMutationDir = opDir
     this.currentOpDir = opDir
 
-    // click / submit は DOM が落ち着くまで待機 (この間に mutation が届く)
+    // click / submit wait for the DOM to settle (mutations arrive meanwhile)
     if (isClickLike) {
       await sleep(500)
     }
 
-    // 操作後スクリーンショット (スクリーンショット有効時)
     let screenshotAfter: string | undefined
     if (this.config.screenshotEnabled) {
       screenshotAfter = await this.takeScreenshot(opDir, 'after')
     }
 
-    // 操作後 DOM スナップショット (FULL_SNAPSHOT_ENABLED=true 時)
     if (this.config.fullSnapshotEnabled) {
       await this.captureSnapshot(opDir)
     }
@@ -223,10 +195,10 @@ export class PageTracer {
   }
 
   /**
-   * スクリーンショットを撮影して保存する。
-   * 失敗しても undefined を返して呼び出し元の処理を止めない。
-   * @param opDir - 保存先の操作ディレクトリ
-   * @param phase - 撮影タイミング ('before' | 'after')
+   * Takes a screenshot and saves it.
+   * On failure it returns undefined instead of interrupting the caller.
+   * @param opDir - Operation directory to save into
+   * @param phase - When the screenshot is taken (`before` or `after`)
    */
   private async takeScreenshot(
     opDir: string,
@@ -245,8 +217,8 @@ export class PageTracer {
   }
 
   /**
-   * MutationObserver の変更バッチを現在の操作ディレクトリに追記する。
-   * 操作ディレクトリが未設定 (操作前) の場合は破棄する。
+   * Appends a MutationObserver batch to the current operation directory.
+   * Discards it if no operation directory is set yet.
    */
   private async saveMutation(rawChanges: RawDomChange[]): Promise<void> {
     const targetDir = this.currentMutationDir
@@ -286,9 +258,6 @@ export class PageTracer {
     await this.storage.appendOpMutation(targetDir, record)
   }
 
-  /**
-   * フレームナビゲーションイベントを処理する。
-   */
   private async handleNavigation(frame: Frame): Promise<void> {
     if (this.stopped) return
 
@@ -301,10 +270,10 @@ export class PageTracer {
   }
 
   /**
-   * ナビゲーションを操作ディレクトリに記録し、DOM スナップショットを取得する。
-   * メインフレームの場合のみスナップショットを保存し currentOpDir を更新する。
-   * @param url - ナビゲーション先 URL
-   * @param frameType - フレームの種別
+   * Records a navigation in an operation directory and captures a DOM snapshot.
+   * Only for the main frame, it saves the snapshot and updates the current operation directory.
+   * @param url - Destination URL
+   * @param frameType - Frame type
    */
   private async recordNavigation(
     url: string,
@@ -332,16 +301,16 @@ export class PageTracer {
       return
     }
 
-    // ナビゲーション後の DOM スナップショットをベースラインとして保存
+    // Save the DOM snapshot after the navigation as a baseline
     await this.captureSnapshot(opDir)
-    // 以降の mutation・ネットワークイベントはこのナビゲーションディレクトリに書き込む
+    // Later mutation and network events are written to this navigation directory
     this.currentOpDir = opDir
     this.currentMutationDir = opDir
   }
 
   /**
-   * 現在のページの DOM スナップショットを snapshot.json に保存する。
-   * @param opDir - 保存先の操作ディレクトリ
+   * Saves a DOM snapshot of the current page to `snapshot.json`.
+   * @param opDir - Operation directory to save into
    */
   private async captureSnapshot(opDir: string): Promise<void> {
     if (!this.cdpSession) return
@@ -353,13 +322,13 @@ export class PageTracer {
       )
       await this.storage.writeOpSnapshot(opDir, snapshot)
     } catch (error) {
-      console.warn('[PageTracer] DOM スナップショット取得失敗:', error)
+      console.warn('[PageTracer] Failed to capture the DOM snapshot:', error)
     }
   }
 
   /**
-   * セッション全体でユニークなイベント ID を生成する。
-   * 複数タブが同じ SessionStorage を共有するため、カウンタは storage 側で一元管理する。
+   * Generates an event ID that is unique within the session.
+   * Multiple tabs share one SessionStorage, so the counter is kept on the storage side.
    */
   private nextEventId(): string {
     return this.storage.nextEventId()

@@ -1,211 +1,184 @@
 /**
- * セッションメタデータ。セッション開始時に metadata.json として保存される。
+ * Session metadata. Saved as `metadata.json` when the session starts.
  */
 export interface SessionMetadata {
-  /** セッション識別子 */
   sessionId: string
-  /** セッション開始日時 (ISO 8601) */
+  /** Session start time (ISO 8601) */
   startTime: string
-  /** 接続した Chrome の URL */
+  /** URL of the connected Chrome */
   chromeUrl: string
 }
 
 /**
- * トレーサーイベントの共通フィールド。
- * すべてのイベント型が継承する基底インターフェース。
+ * Fields shared by all tracer events.
+ * Base interface inherited by every event type.
  */
 export interface BaseTracerEvent {
-  /** イベント一意識別子 */
   eventId: string
-  /** このイベントが属するセッション ID */
   sessionId: string
-  /** イベント発生元フレームの URL (window.location.href) */
+  /**
+   * URL associated with the event: the main-frame URL for user actions, the
+   * destination URL for navigations, and the document URL for network events.
+   */
   frameUrl: string
-  /** イベント発生日時 (ISO 8601) */
+  /** Time the event occurred (ISO 8601) */
   timestamp: string
 }
 
 /**
- * ユーザー操作イベント。クリック・キー入力・フォーム操作を記録する。
- * ops/<eventId>-<frameType>-<action>/event.json に整形済み JSON で保存される。
+ * User action event: a click, key press, or form interaction.
+ * Saved as pretty-printed JSON in `ops/<evNNNNNN>-<frameType>-<action>/event.json`.
  */
 export interface UserActionEvent extends BaseTracerEvent {
   type: 'user_action'
-  /** 操作の種別 */
   action: 'click' | 'keydown' | 'input' | 'submit'
-  /** 対象要素のタグ名 */
   tagName: string
-  /** 対象要素の id 属性 */
   elementId: string
-  /** 対象要素の class 属性 */
   className: string
-  /** 入力値 (パスワードは *** にマスクされる) */
+  /** Input value (password fields are masked as `***`) */
   value: string
-  /** 押下されたキー (keydown のみ。パスワードフィールドでは ***) */
+  /** Pressed key (keydown only; `***` in password fields) */
   key?: string
   /**
-   * 操作直前のスクリーンショット相対パス。click / submit かつ SCREENSHOT_ENABLED=true 時のみ。
-   * 例: ops/ev000002-main-click/before.png
+   * Path of the screenshot taken just before the action, relative to the
+   * session directory. Only for click / submit with SCREENSHOT_ENABLED=true.
+   * Example: `ops/ev000002-main-click/before.png`
    */
   screenshotBefore?: string
   /**
-   * 操作後のスクリーンショット相対パス。SCREENSHOT_ENABLED=true 時のみ。
-   * 例: ops/ev000002-main-click/after.png
+   * Path of the screenshot taken after the action, relative to the session
+   * directory. Only with SCREENSHOT_ENABLED=true.
+   * Example: `ops/ev000002-main-click/after.png`
    */
   screenshotAfter?: string
 }
 
 /**
- * DOM の個別変更レコード。
- */
-/**
- * DOM 変更の重要度レベル。
+ * Importance level of a DOM change.
  *
- * - 1 (noise): &lt;head&gt; 内変更・SCRIPT/LINK/META/#comment の追加削除など、ほぼ確実に不要なノイズ
- * - 2 (minor): characterData 変更・data-* 属性・#text のみの変更など、フレームワーク内部状態
- * - 3 (significant): class/style/hidden/aria-* 属性・body への要素追加削除など、目に見える UI 変化
+ * - 1 (noise): almost certainly irrelevant, e.g. changes inside `<head>` or adding/removing only resource-like nodes (SCRIPT, LINK, META, ...) and #comment
+ * - 2 (minor): framework-internal state, e.g. characterData changes, `data-*` attributes, or #text-only changes
+ * - 3 (significant): visible UI changes, e.g. class / style / hidden / aria-* attributes or adding/removing non-resource elements outside `<head>`
  */
 export type MutationLevel = 1 | 2 | 3
 
+/**
+ * A single DOM change.
+ */
 export interface DomChange {
-  /** 変更の種別 */
   mutationType: 'childList' | 'attributes' | 'characterData'
-  /** 変更対象ノードの XPath */
   targetPath: string
-  /** 追加されたノードのタグ名リスト (childList のみ) */
+  /** Tag names of added nodes (childList only) */
   addedNodes?: string[]
-  /** 削除されたノードのタグ名リスト (childList のみ) */
+  /** Tag names of removed nodes (childList only) */
   removedNodes?: string[]
-  /** 変更された属性名 (attributes のみ) */
+  /** Name of the changed attribute (attributes only) */
   attributeName?: string
-  /** 変更後の属性値 (attributes のみ) */
+  /** Attribute value after the change (attributes only; `null` if removed) */
   attributeValue?: string | null
-  /** 変更前の値 */
+  /** Value before the change (attributes only) */
   oldValue?: string | null
-  /** テキスト内容 (characterData のみ) */
+  /** Text content (characterData only) */
   characterData?: string
   /**
-   * 変更の重要度レベル。
-   * jq 等での後処理フィルタリングに使用する。
-   * 定義は {@link MutationLevel} を参照。
+   * Importance level of the change.
+   * Used for post-hoc filtering with tools such as jq.
+   * See {@link MutationLevel} for the definition.
    */
   level: MutationLevel
 }
 
 /**
- * ops/<eventId>-<frameType>-<action>/mutations.jsonl の 1 行に相当するレコード。
- * MutationObserver の 1 回のコールバック呼び出し分の変更をまとめたもの。
+ * One line of `ops/<evNNNNNN>-<frameType>-<action>/mutations.jsonl`.
+ * Groups the changes from one MutationObserver callback invocation.
  */
 export interface OpMutationRecord {
-  /** 変更検知日時 (ISO 8601) */
+  /** Time the changes were received (ISO 8601) */
   timestamp: string
   /**
-   * このバッチに含まれる変更の最大重要度レベル。
-   * バッチ単位でフィルタする際に使用する。
-   * 例: `jq 'select(.maxLevel >= 3)' mutations.jsonl`
+   * Highest importance level among the changes in this batch.
+   * Used to filter per batch.
+   * Example: `jq 'select(.maxLevel >= 3)' mutations.jsonl`
    */
   maxLevel: MutationLevel
-  /** MutationObserver が検知した変更リスト */
+  /** Changes reported by the MutationObserver */
   changes: DomChange[]
 }
 
-/**
- * ネットワークリクエスト送信イベント。
- */
 export interface NetworkRequestEvent extends BaseTracerEvent {
   type: 'network_request'
   /** CDP requestId */
   requestId: string
-  /** リクエスト URL */
   url: string
-  /** HTTP メソッド */
   method: string
-  /** リクエストヘッダー */
   headers: Record<string, string>
-  /** POST データ (存在する場合) */
+  /** POST data (if any) */
   postData?: string
 }
 
-/**
- * ネットワークレスポンス受信イベント。
- */
 export interface NetworkResponseEvent extends BaseTracerEvent {
   type: 'network_response'
   /** CDP requestId */
   requestId: string
-  /** レスポンス URL */
   url: string
-  /** HTTP ステータスコード */
   status: number
-  /** コンテンツの MIME タイプ */
   mimeType: string
-  /** レスポンスヘッダー */
   headers: Record<string, string>
 }
 
-/**
- * ネットワークロード完了イベント。
- */
 export interface NetworkFinishedEvent extends BaseTracerEvent {
   type: 'network_finished'
   /** CDP requestId */
   requestId: string
-  /** リクエスト URL */
   url: string
-  /** 転送されたエンコード済みデータのバイト数 */
+  /** Number of encoded (e.g. compressed) bytes transferred */
   encodedDataLength: number
 }
 
 /**
- * ページナビゲーションイベント。URL 変更時に記録される。
- * ops/<eventId>-<frameType>-navigation/event.json に整形済み JSON で保存される。
+ * Page navigation event, recorded when a frame's URL changes.
+ * Saved as pretty-printed JSON in `ops/<evNNNNNN>-<frameType>-navigation/event.json`.
  */
 export interface NavigationEvent extends BaseTracerEvent {
   type: 'navigation'
-  /** ナビゲーション先 URL */
   url: string
-  /** フレームの種別 */
   frameType: 'main' | 'iframe'
 }
 
 /**
- * ops/ 配下の event.json に保存されるイベント型のユニオン。
+ * Union of the event types saved as `event.json` under `ops/`.
  */
 export type TracerEvent = UserActionEvent | NavigationEvent
 
 /**
- * network.jsonl に保存されるネットワークイベント型のユニオン。
+ * Union of the network event types saved to `network.jsonl`.
  */
 export type NetworkEvent =
   NetworkRequestEvent | NetworkResponseEvent | NetworkFinishedEvent
 
 /**
- * ページに注入したスクリプトから Node.js へ送信されるイベントデータ。
+ * Event data sent from the script injected into the page to Node.js.
  */
 export interface InjectedEvent {
-  /** イベント大分類 */
   type: 'user_action' | 'mutation'
-  /** イベント発生元フレームの種別 (main: メインフレーム, iframe: サブフレーム) */
+  /** Frame the event came from (`main`: main frame, `iframe`: subframe) */
   frameType?: 'main' | 'iframe'
-  /** ユーザー操作の種別 (user_action のみ) */
+  /** Kind of user action (user_action only) */
   action?: 'click' | 'keydown' | 'input' | 'submit'
-  /** 対象要素のタグ名 */
   tagName?: string
-  /** 対象要素の id 属性 */
   elementId?: string
-  /** 対象要素の class 属性 */
   className?: string
-  /** 入力値またはキー名 */
+  /** Input value (masked as `***` for password fields) */
   value?: string
-  /** 押下されたキー名 (keydown のみ) */
+  /** Name of the pressed key (keydown only) */
   key?: string
-  /** DOM 変更の生データリスト (mutation のみ) */
+  /** Raw DOM changes (mutation only) */
   changes?: RawDomChange[]
 }
 
 /**
- * 注入スクリプトから受け取る生の DOM 変更データ。
- * DomChange へ変換される前の形式。
+ * Raw DOM change data received from the injected script,
+ * before it is converted to a DomChange.
  */
 export interface RawDomChange {
   mutationType: string

@@ -1,31 +1,34 @@
 # web-session-tracer
 
-Puppeteer を使って Chrome ブラウザ上のユーザー操作を自動記録するツールです。クリック・キー入力・フォーム送信・ページ遷移・DOM 変更・ネットワーク通信を操作単位でディレクトリに保存します。
+A tool that uses Puppeteer to automatically record user operations in a Chrome browser. Clicks, key presses, form submissions, page navigations, DOM changes, and network traffic are saved to one directory per operation.
 
-## 機能
+## Features
 
-- **ユーザー操作の記録**: click / keydown / input / submit イベントを捕捉
-- **DOM 変更の記録**: MutationObserver による差分ログ（重要度レベル付き）
-- **ネットワークの記録**: リクエスト・レスポンス・完了イベントを操作単位で保存
-- **DOM スナップショット**: ページ遷移時にフル DOM を保存
-- **セキュリティ**: パスワードフィールドの値・キー入力を `***` でマスク
-- **SPA 対応**: Vue Router / Next.js など pushState ベースのナビゲーションを検出
+- **User operations**: captures click / keydown / input / submit events
+- **DOM changes**: records MutationObserver diffs, each with an importance level
+- **Network traffic**: saves request, response, and finished events per operation
+- **DOM snapshots**: saves the full DOM when the main frame navigates (optionally after every operation)
+- **Screenshots**: optional PNGs before and after operations
+- **Security**: masks the value and key presses of password fields as `***`
+- **SPA support**: detects `pushState`-based navigation such as Vue Router and Next.js
 
-## 動作要件
+> Recorded sessions can contain sensitive page content, request and response bodies, and typed values (only password fields are masked). Keep them private and do not commit them.
 
-- Node.js 22 以上
-- pnpm
-- リモートデバッグポートを開放した Chrome
+## Requirements
 
-## セットアップ
+- Node.js (the version in [`.node-version`](.node-version); the code needs Node.js 22 or later)
+- pnpm (the version is pinned in `package.json`)
+- Chrome with the remote debugging port open
+
+## Setup
 
 ```bash
 pnpm install
 ```
 
-## 使い方
+## Usage
 
-### 1. Chrome をリモートデバッグモードで起動
+### 1. Start Chrome in remote debugging mode
 
 ```bash
 /opt/google/chrome/chrome \
@@ -34,105 +37,110 @@ pnpm install
   --no-first-run
 ```
 
-### 2. トレーサーを起動
+### 2. Start the tracer
 
 ```bash
 pnpm start
 ```
 
-起動すると Chrome に接続し、セッションの記録を開始します。ブラウザを操作すると `sessions/` ディレクトリに記録が蓄積されます。停止するには `Ctrl+C` または `SIGTERM` を送信します。
+The tracer connects to Chrome and starts a session. As you operate the browser, records accumulate in the `sessions/` directory. Stop it with `Ctrl+C` or by sending `SIGTERM`.
 
 ```
-[Main] Chrome に接続中: http://localhost:9222
-[Main] Chrome への接続成功
-[SessionManager] セッション開始: session-20260223-020207
-[SessionManager] 保存先: /path/to/sessions/session-20260223-020207
-[PageTracer] トレース開始: https://example.com/
-[Main] トレース中... (Ctrl+C または SIGTERM で停止)
+[Main] Connecting to Chrome: http://localhost:9222
+[Main] Connected to Chrome
+[SessionManager] Session started: session-20260223-020207294
+[SessionManager] Output directory: /path/to/sessions/session-20260223-020207294
+[PageTracer] Tracing started: https://example.com/
+[Main] Tracing... (stop with Ctrl+C or SIGTERM)
 ```
 
-### Docker / docker compose で起動する場合
+### Running with Docker / docker compose
 
-Docker イメージを使って実行することもできます。ホスト側の Chrome に接続する場合は `network_mode: host` が必要です。
+You can also run the tracer from a Docker image. Connecting to Chrome on the host requires `network_mode: host`.
 
 ```bash
-# イメージのビルド
+# Build the image
 docker build -t web-session-tracer .
 
-# docker compose で起動（compose.yaml がある場合）
+# Start with docker compose (uses compose.yaml)
 docker compose up
 ```
 
-`compose.yaml` のデフォルト設定：
+`compose.yaml` sets the following by default (see the file for the complete list):
 
 ```yaml
 services:
   tracer:
     build: .
-    network_mode: host        # ホストの Chrome (localhost:9222) に接続
+    network_mode: host        # connect to Chrome on the host (localhost:9222)
     volumes:
-      - ./sessions:/sessions  # セッションデータをホストに保存
+      - ./sessions:/sessions  # keep session data on the host
     environment:
       CHROME_URL: http://localhost:9222
       SESSION_DIR: /sessions
 ```
 
-Chrome はデフォルトで `127.0.0.1` のみでリッスンするため、コンテナ内から到達するには `network_mode: host` でホストのネットワークスタックを共有する必要があります。
+Chrome listens only on `127.0.0.1` by default, so the container has to share the host's network stack with `network_mode: host` to reach it.
 
-別のホスト上の Chrome（`--remote-debugging-address=0.0.0.0` 付きで起動）に接続する場合は `CHROME_URL` を上書きします：
+To connect to Chrome on another host (started with `--remote-debugging-address=0.0.0.0`), override `CHROME_URL` with `docker compose run`. A shell variable is not enough, because `compose.yaml` sets `CHROME_URL` to a literal value:
 
 ```bash
-CHROME_URL=http://192.168.1.10:9222 docker compose up
+docker compose run --rm -e CHROME_URL=http://192.168.1.10:9222 tracer
 ```
 
-### 3. 記録の確認
+### 3. Inspect the records
 
 ```bash
 ls sessions/session-*/ops/
 ```
 
-セッションファイルの詳細は [`sessions/README.md`](sessions/README.md) を参照してください。
+See [`sessions/README.md`](sessions/README.md) for the details of the session files.
 
-## 設定（環境変数）
+## Configuration (environment variables)
 
-| 変数名 | デフォルト | 説明 |
-|--------|-----------|------|
-| `CHROME_URL` | `http://localhost:9222` | Chrome リモートデバッグ URL |
-| `SESSION_DIR` | `./sessions` | セッションデータの保存先 |
-| `NETWORK_BUFFER_SIZE` | `1000` | メモリ上に保持する未完了リクエストの最大数 |
-| `SCREENSHOT_ENABLED` | `false` | `true` にすると操作前後のスクリーンショットを保存 |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CHROME_URL` | `http://localhost:9222` | Chrome remote debugging URL |
+| `SESSION_DIR` | `./sessions` | Where session data is stored |
+| `NETWORK_BUFFER_SIZE` | `1000` | Maximum number of in-flight requests kept in memory (invalid or non-positive values fall back to the default) |
+| `SCREENSHOT_ENABLED` | `false` | When `true`, saves screenshots before and after operations |
+| `FULL_SNAPSHOT_ENABLED` | `false` | When `true`, saves a DOM snapshot after every user action as well (main-frame navigations are always snapshotted) |
 
-例:
+Boolean variables are enabled only by the exact string `true`.
+
+Example:
 
 ```bash
 CHROME_URL=http://localhost:9222 SESSION_DIR=/data/sessions pnpm start
 ```
 
-## 開発
+## Development
 
 ```bash
-# 型チェック + lint + フォーマットチェック
+# Type check + lint + format check
 pnpm lint
 
-# 自動修正
+# Auto-fix
 pnpm fix
 
-# ウォッチモード（ファイル変更時に自動再起動）
+# Watch mode (restarts on file changes)
 pnpm dev
 ```
 
-## アーキテクチャ
+There is no test suite; `pnpm lint` is the only automated check.
+
+## Architecture
 
 ```
 Chrome
   ↓ Chrome DevTools Protocol (CDP)
-PageTracer          - ページ単位の操作記録
-  ├── 注入スクリプト  - ブラウザ内で click / keydown / input / submit / MutationObserver を捕捉
-  ├── NetworkTracker - CDP 経由でネットワークイベントを収集
-  └── SessionStorage - ops/ ディレクトリへの書き込み
-SessionManager      - セッション全体の管理
+SessionManager      - manages the whole session and attaches a PageTracer to each tab
+  └── PageTracer    - records the operations of one page
+        ├── injected script - captures click / keydown / input / submit and MutationObserver changes inside the browser
+        ├── NetworkTracker  - collects network events over CDP
+        └── SessionStorage  - writes the ops/ directories
 ```
 
-## ライセンス
+## License
 
 MIT

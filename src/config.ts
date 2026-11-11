@@ -1,40 +1,39 @@
 /**
- * トレーサーの動作設定。環境変数から読み込まれる。
+ * Tracer settings, loaded from environment variables.
  */
 export interface TracerConfig {
   /**
-   * Chrome リモートデバッグ URL。
-   * 環境変数 CHROME_URL で設定 (デフォルト: http://localhost:9222)。
+   * Chrome remote debugging URL.
+   * Set via `CHROME_URL` (default: `http://localhost:9222`).
    */
   chromeUrl: string
   /**
-   * セッションデータの保存先ディレクトリ。
-   * 環境変数 SESSION_DIR で設定 (デフォルト: ./sessions)。
+   * Directory where session data is stored.
+   * Set via `SESSION_DIR` (default: `./sessions`).
    */
   sessionDir: string
   /**
-   * ネットワークリングバッファのサイズ。
-   * メモリ上に保持する未完了リクエストの最大数。
-   * 環境変数 NETWORK_BUFFER_SIZE で設定 (デフォルト: 1000)。
+   * Maximum number of in-flight requests kept in memory (ring buffer size).
+   * Set via `NETWORK_BUFFER_SIZE` (default: 1000).
    */
   networkBufferSize: number
   /**
-   * スクリーンショット撮影の有効/無効。
-   * 環境変数 SCREENSHOT_ENABLED で設定 (デフォルト: false)。
-   * true にすると click / submit の前後、keydown / input の後に PNG を保存する。
+   * Whether to save screenshots.
+   * Set via `SCREENSHOT_ENABLED` (default: false; only the exact string `true`
+   * enables it). When enabled, a PNG is saved before and after click / submit
+   * and after keydown / input.
    */
   screenshotEnabled: boolean
   /**
-   * 全操作へのDOM スナップショット取得の有効/無効。
-   * 環境変数 FULL_SNAPSHOT_ENABLED で設定 (デフォルト: false)。
-   * ナビゲーション時は本設定によらず常にスナップショットを取得する。
-   * true にすると、ナビゲーション時に加えてユーザー操作のたびにも snapshot.json を保存する。
+   * Whether to also capture a DOM snapshot after every user action.
+   * Set via `FULL_SNAPSHOT_ENABLED` (default: false; only the exact string
+   * `true` enables it). Main-frame navigations are always snapshotted.
    */
   fullSnapshotEnabled: boolean
 }
 
 /**
- * 環境変数からトレーサーの設定を読み込んで返す。
+ * Reads the tracer settings from environment variables.
  */
 export function getConfig(): TracerConfig {
   return {

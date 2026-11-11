@@ -1,38 +1,37 @@
 /**
- * ページに注入するイベント収集スクリプトの文字列を返す。
+ * Returns the source of the event-collection script injected into the page.
  *
- * このスクリプトはブラウザの JavaScript コンテキストで実行され、
- * ユーザー操作イベントと DOM 変更を window.__wstEvent() 経由で
- * Node.js 側に送信する。
+ * The script runs in the browser's JavaScript context and sends user action
+ * events and DOM changes to Node.js through `window.__wstEvent()`.
  *
- * 対応イベント:
- * - click, keydown, input, submit (ユーザー操作)
- * - MutationObserver による DOM 変更
+ * Captured events:
+ * - click, keydown, input, submit (user actions)
+ * - DOM changes via MutationObserver
  *
- * セキュリティ:
- * - パスワードフィールド (type="password") の値・キーは *** でマスクされる
+ * Security:
+ * - The value and key of password fields (`type="password"`) are masked as `***`.
  *
- * 多重インストール対策:
- * - window.__wstHandlers に各イベントハンドラー関数を保持する。
- * - スクリプト実行のたびに古いハンドラー・オブザーバーを取り除き、
- *   最新セッションのハンドラーで置き換える。
- * - これにより、複数の puppeteer セッションが evaluateOnNewDocument を
- *   登録しても、最後に実行されたスクリプトのハンドラーが有効になる。
+ * Protection against repeated installation:
+ * - The event handlers are kept in `window.__wstHandlers`.
+ * - Each time the script runs, it removes the previous handlers and observer
+ *   and replaces them with the latest ones.
+ * - So even if several puppeteer sessions register `evaluateOnNewDocument`,
+ *   only the handlers of the script that ran last stay active.
  */
 export function getInjectedScript(): string {
   return `(function () {
   'use strict';
 
   /**
-   * DOM 要素の XPath を返す。
-   * @param {Element} el - 対象要素
-   * @returns {string} XPath 文字列
+   * Returns the XPath of a DOM element.
+   * @param {Element} el - Target element
+   * @returns {string} XPath string
    */
   function getXPath(el) {
     if (!el) return '';
-    // テキストノード等は親要素の XPath を使用する。
-    // characterData の m.target はテキストノードであり Element ではないため、
-    // そのまま処理すると常に '' を返し mutation-level の誤分類につながる。
+    // characterData targets are text nodes, not Elements: use the parent
+    // element's path, or this would return '' and mutation-level would
+    // misclassify the change.
     if (el.nodeType !== Node.ELEMENT_NODE) {
       return el.parentElement ? getXPath(el.parentElement) : '';
     }
@@ -52,11 +51,10 @@ export function getInjectedScript(): string {
   }
 
   /**
-   * イベントデータを Node.js 側へ送信する。
-   * __wstEvent は evaluateOnNewDocument の実行順序により
-   * スクリプト設定時点では未定義の場合があるため、呼び出し時に確認する。
-   * エラーが発生してもページの動作は止めない。
-   * @param {object} data - 送信データ
+   * Sends event data to Node.js.
+   * Depending on the execution order of evaluateOnNewDocument, __wstEvent may
+   * not be defined when the script is set up, so it is checked on every call.
+   * @param {object} data - Data to send
    */
   function sendEvent(data) {
     try {
@@ -64,16 +62,13 @@ export function getInjectedScript(): string {
         window.__wstEvent(JSON.stringify(data));
       }
     } catch (_) {
-      // 送信エラーはページ動作に影響させない
+      // A send error must not affect the page
     }
   }
 
-  // メインフレームか iframe かを判定する
   var frameType = window.self === window.top ? 'main' : 'iframe';
 
-  // --- 古いハンドラーとオブザーバーの取り除き ---
-
-  // 前回のイベントリスナーを削除
+  // Remove the handlers and observer of a previous injection
   if (window.__wstHandlers) {
     document.removeEventListener('click', window.__wstHandlers.click, true);
     document.removeEventListener('keydown', window.__wstHandlers.keydown, true);
@@ -81,12 +76,9 @@ export function getInjectedScript(): string {
     document.removeEventListener('submit', window.__wstHandlers.submit, true);
   }
 
-  // 前回の MutationObserver を切断
   if (window.__wstObserver) {
     window.__wstObserver.disconnect();
   }
-
-  // --- ユーザー操作イベント ---
 
   /** @type {EventListener} */
   var clickHandler = function (e) {
@@ -156,15 +148,12 @@ export function getInjectedScript(): string {
   document.addEventListener('input', inputHandler, true);
   document.addEventListener('submit', submitHandler, true);
 
-  // ハンドラー参照を保持 (次回の取り除きに使用)
   window.__wstHandlers = {
     click: clickHandler,
     keydown: keydownHandler,
     input: inputHandler,
     submit: submitHandler,
   };
-
-  // --- DOM 変更監視 ---
 
   var mutationObserver = new MutationObserver(function (mutations) {
     var changes = mutations.map(function (m) {
@@ -205,7 +194,6 @@ export function getInjectedScript(): string {
     characterDataOldValue: true,
   });
 
-  // オブザーバー参照を保持 (次回の取り除きに使用)
   window.__wstObserver = mutationObserver;
 })();`
 }

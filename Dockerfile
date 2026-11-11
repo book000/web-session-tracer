@@ -15,35 +15,36 @@ RUN apk update && \
 
 WORKDIR /app
 
-# pnpm ハードリンクではなくファイルコピーを使う設定。
-# pnpm はデフォルトでストアへのハードリンクで node_modules を構成するが、
-# Docker ビルド後にキャッシュマウントが消えるとリンクが切れるため、
-# node-linker=hoisted でファイルをコピーする方式に切り替える。
+# pnpm hard-links node_modules into the store, and the links break once the
+# build cache mount is gone, so copy files instead (node-linker=hoisted).
 RUN echo "node-linker=hoisted" >> .npmrc
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY src src
 
-# pnpm store を Docker キャッシュとして保持し、パッケージダウンロードをスキップする。
-# キャッシュ ID を pnpm-hoisted とすることで、旧キャッシュ (prod のみ) との衝突を防ぐ。
-# tsx は dependencies に含まれるため --prod でインストールしても実行に必要なモジュールが揃う。
+# Keep the pnpm store as a Docker cache to skip package downloads.
+# tsx is in dependencies, so --prod still installs every module needed to run.
 RUN --mount=type=cache,id=pnpm-hoisted,target=/pnpm/store \
   pnpm install --frozen-lockfile --prod
 
-# セッションデータの保存先。ホスト側ディレクトリをマウントして永続化する。
+# Where session data is stored. Mount a host directory to persist it.
 # docker run -v /host/sessions:/sessions ...
 VOLUME ["/sessions"]
 
-# Chrome のリモートデバッグ URL。Docker ネットワーク経由で接続する場合は
-# ホスト側の IP またはサービス名を指定する。
-# 例: -e CHROME_URL=http://host.docker.internal:9222
+# Chrome remote debugging URL. When connecting over the Docker network,
+# specify the host's IP or a service name.
+# Example: -e CHROME_URL=http://host.docker.internal:9222
 ENV CHROME_URL=http://localhost:9222
 ENV SESSION_DIR=/sessions
 ENV NETWORK_BUFFER_SIZE=1000
 
-# スクリーンショット撮影の有効/無効 (デフォルト無効)
-# true にすると click/submit 前後・keydown/input 後に PNG を保存する
+# Enable or disable screenshots (disabled by default).
+# When true, a PNG is saved before and after click / submit and after keydown / input.
 ENV SCREENSHOT_ENABLED=false
+
+# Also capture a full DOM snapshot after every user action (disabled by default).
+# Main-frame navigations are always snapshotted.
+ENV FULL_SNAPSHOT_ENABLED=false
 
 ENV NODE_ENV=production
 

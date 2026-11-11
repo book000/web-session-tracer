@@ -2,41 +2,31 @@ import puppeteer from 'puppeteer-core'
 import { getConfig } from './config'
 import { SessionManager } from './tracer/session-manager'
 
-/**
- * アプリケーションのエントリーポイント。
- *
- * 処理フロー:
- * 1. 環境変数から設定を読み込む
- * 2. 既に起動済みの Chrome (CDPポート公開済み) に接続する
- * 3. SessionManager を起動してユーザー操作の記録を開始する
- * 4. SIGINT / SIGTERM を受信したらグレースフルシャットダウンする
- */
 async function main(): Promise<void> {
   const config = getConfig()
 
-  console.log(`[Main] Chrome に接続中: ${config.chromeUrl}`)
+  console.log(`[Main] Connecting to Chrome: ${config.chromeUrl}`)
 
   const browser = await puppeteer.connect({
     browserURL: config.chromeUrl,
-    // ビューポートはブラウザ側に委ねる
+    // Leave the viewport to the browser
     defaultViewport: null,
   })
 
-  console.log('[Main] Chrome への接続成功')
+  console.log('[Main] Connected to Chrome')
 
   const sessionManager = new SessionManager(browser, config)
   await sessionManager.start()
 
-  console.log('[Main] トレース中... (Ctrl+C または SIGTERM で停止)')
+  console.log('[Main] Tracing... (stop with Ctrl+C or SIGTERM)')
 
-  // グレースフルシャットダウン
   const shutdown = async (signal: string): Promise<void> => {
-    console.log(`[Main] シャットダウン開始 (${signal})`)
+    console.log(`[Main] Shutting down (${signal})`)
     await sessionManager.stop()
     await browser.disconnect()
   }
 
-  // 二重シャットダウン防止フラグ
+  // Prevents running the shutdown twice
   let shuttingDown = false
   const handleSignal = (signal: string): void => {
     if (shuttingDown) return
@@ -47,7 +37,7 @@ async function main(): Promise<void> {
         process.exit(0)
       })
       .catch((error: unknown) => {
-        console.error('[Main] シャットダウンエラー:', error)
+        console.error('[Main] Shutdown error:', error)
         // eslint-disable-next-line unicorn/no-process-exit
         process.exit(1)
       })
@@ -62,7 +52,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error('[Main] 致命的エラー:', error)
+  console.error('[Main] Fatal error:', error)
   // eslint-disable-next-line unicorn/no-process-exit
   process.exit(1)
 })

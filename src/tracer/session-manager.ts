@@ -5,18 +5,14 @@ import { SessionStorage } from '../storage'
 import type { SessionMetadata } from '../types'
 import { PageTracer } from './page-tracer'
 
-/**
- * 数値を 2 桁にゼロパディングして返す。
- * @param n - パディング対象の数値
- */
 function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
 /**
- * セッション ID を生成する。
- * 形式: session-YYYYMMDD-HHmmssSSS (ミリ秒含む)
- * 同一秒内の再起動によるディレクトリ衝突を防ぐ。
+ * Generates a session ID in the local time zone.
+ * Format: `session-YYYYMMDD-HHmmssSSS` (includes milliseconds, so restarting
+ * within the same second does not collide on the directory name).
  */
 function generateSessionId(): string {
   const now = new Date()
@@ -35,11 +31,11 @@ function generateSessionId(): string {
 }
 
 /**
- * ブラウザ全体のセッション管理を担当するクラス。
+ * Manages the session for the whole browser.
  *
- * 1 回の実行を 1 セッションとして管理し、
- * 既存・新規ページの両方にトレーサーをアタッチする。
- * ページ (Target) の作成・破棄を監視し、PageTracer のライフサイクルを管理する。
+ * One run is one session. It attaches a tracer to both existing and new
+ * pages, and watches page (Target) creation and destruction to manage the
+ * PageTracer lifecycle.
  */
 export class SessionManager {
   private readonly browser: Browser
@@ -60,10 +56,6 @@ export class SessionManager {
     )
   }
 
-  /**
-   * セッション管理を開始する。
-   * セッションディレクトリを作成し、既存・新規ページを追跡する。
-   */
   async start(): Promise<void> {
     this.running = true
 
@@ -74,10 +66,9 @@ export class SessionManager {
     }
     await this.storage.initialize(metadata)
 
-    console.log(`[SessionManager] セッション開始: ${this.storage.sessionId}`)
-    console.log(`[SessionManager] 保存先: ${this.storage.sessionDir}`)
+    console.log(`[SessionManager] Session started: ${this.storage.sessionId}`)
+    console.log(`[SessionManager] Output directory: ${this.storage.sessionDir}`)
 
-    // すでに開いているページを追跡
     const existingTargets = this.browser.targets()
     for (const target of existingTargets) {
       if (target.type() === TargetType.PAGE) {
@@ -85,19 +76,17 @@ export class SessionManager {
       }
     }
 
-    // 新規タブの監視
     this.browser.on('targetcreated', (target: Target) => {
       if (target.type() === TargetType.PAGE) {
         this.attachToTarget(target).catch((error: unknown) => {
           console.error(
-            '[SessionManager] 新規ターゲットへのアタッチに失敗:',
+            '[SessionManager] Failed to attach to the new target:',
             error
           )
         })
       }
     })
 
-    // タブ閉鎖の監視
     this.browser.on('targetdestroyed', (target: Target) => {
       const tracer = this.pageTracers.get(target)
       if (!tracer) {
@@ -105,37 +94,30 @@ export class SessionManager {
       }
 
       tracer.stop().catch((error: unknown) => {
-        console.error('[SessionManager] PageTracer 停止エラー:', error)
+        console.error('[SessionManager] PageTracer stop error:', error)
       })
       this.pageTracers.delete(target)
     })
   }
 
-  /**
-   * セッション管理を停止する。
-   * 全 PageTracer を停止して記録を完了する。
-   */
   async stop(): Promise<void> {
     this.running = false
 
     await Promise.all(
       this.pageTracers.values().map((tracer) =>
         tracer.stop().catch((error: unknown) => {
-          console.error('[SessionManager] PageTracer 停止エラー:', error)
+          console.error('[SessionManager] PageTracer stop error:', error)
         })
       )
     )
     this.pageTracers.clear()
 
     console.log(
-      `[SessionManager] セッション終了: ${this.storage.sessionId}` +
-        ` (記録操作数: ${this.storage.opTotal})`
+      `[SessionManager] Session ended: ${this.storage.sessionId}` +
+        ` (recorded operations: ${this.storage.opTotal})`
     )
   }
 
-  /**
-   * 指定ターゲットに PageTracer をアタッチして追跡を開始する。
-   */
   private async attachToTarget(target: Target): Promise<void> {
     if (!this.running) return
 
@@ -148,7 +130,7 @@ export class SessionManager {
     try {
       await tracer.start()
     } catch (error) {
-      console.error('[SessionManager] PageTracer 開始エラー:', error)
+      console.error('[SessionManager] PageTracer start error:', error)
       this.pageTracers.delete(target)
     }
   }

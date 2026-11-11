@@ -6,42 +6,38 @@ import type {
   NetworkResponseEvent,
 } from '../types'
 
-/** Date が表現できる Unix 時刻の最大値 (秒) */
+/** Largest Unix time (in seconds) that a Date can represent */
 const MAX_EPOCH_SECONDS = 8.64e12
 
 /**
- * CDP セッションごとの時刻換算状態。
- * setup() の呼び出しごとに 1 つ作られ、そのオブジェクトの同一性をセッションの識別子として使う。
+ * Time-conversion state for one CDP session.
+ * One is created per setup() call, and its object identity identifies the session.
  */
 interface SessionClock {
-  /** 直近に取得できた wallTime - timestamp (秒)。未取得の間は null */
+  /** Latest `wallTime - timestamp` (seconds) obtained; null until one is known */
   latestOffset: number | null
-  /** 基準を取得できなかった旨の警告を出力済みか */
+  /** Whether the warning about a missing time reference has been logged */
   warned: boolean
 }
 
-/** リングバッファ管理用の保留中リクエスト情報 */
+/** In-flight request info managed by the ring buffer */
 interface PendingRequest {
   url: string
   documentUrl: string
-  /** このリクエスト自身の requestWillBeSent から求めた wallTime - timestamp (秒)。求められなかった場合は null */
+  /** `wallTime - timestamp` (seconds) from this request's own requestWillBeSent; null if it could not be computed */
   clockOffset: number | null
-  /** このエントリを登録した setup() の SessionClock */
+  /** SessionClock of the setup() call that registered this entry */
   owner: SessionClock
 }
 
-/**
- * ユニークなイベント ID を生成する。
- * タイムスタンプとランダム文字列を組み合わせる。
- */
 function generateEventId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
 /**
- * Unix 時刻 (秒) をミリ秒に丸めた ISO 8601 文字列に変換する。
- * Date で表現できない値 (非有限値を含む) の場合は null を返す。
- * @param seconds - Unix 時刻 (秒)
+ * Converts a Unix time (seconds) to an ISO 8601 string rounded to milliseconds.
+ * Returns null for values a Date cannot represent (including non-finite values).
+ * @param seconds - Unix time in seconds
  */
 function isoFromEpochSeconds(seconds: number): string | null {
   const date = new Date(Math.round(seconds * 1000))
@@ -49,10 +45,11 @@ function isoFromEpochSeconds(seconds: number): string | null {
 }
 
 /**
- * CDP の MonotonicTime (timestamp) を Unix 時刻へ換算するためのオフセット (秒) を求める。
- * 換算に使えない値の場合は null を返す。
- * @param timestamp - CDP の MonotonicTime (秒)
- * @param wallTime - 同じ時点の Unix 時刻 (秒)
+ * Computes the offset (seconds) for converting a CDP MonotonicTime
+ * (timestamp) to Unix time.
+ * Returns null if the values cannot be used for the conversion.
+ * @param timestamp - CDP MonotonicTime (seconds)
+ * @param wallTime - Unix time (seconds) at the same moment
  */
 function clockOffsetFromCdp(
   timestamp: number,
@@ -67,21 +64,17 @@ function clockOffsetFromCdp(
 }
 
 /**
- * Chrome CDP Network ドメインを使用してネットワーク通信を追跡するクラス。
+ * Tracks network traffic through the Chrome CDP Network domain.
  *
- * 追跡対象イベント:
- * - Network.requestWillBeSent (リクエスト送信)
- * - Network.responseReceived (レスポンス受信)
- * - Network.loadingFinished (ロード完了)
- * - Network.loadingFailed (ロード失敗)
+ * Network events are appended to `network.jsonl` in the current operation
+ * directory (getCurrentOpDir) at the time they occur. If no operation
+ * directory is set yet, they are discarded.
  *
- * ネットワークイベントは、発生時点の現在操作ディレクトリ (getCurrentOpDir) に
- * network.jsonl として書き込まれる。操作ディレクトリが未設定の場合は破棄する。
+ * CDP `timestamp` values are MonotonicTime (a monotonic clock), not Unix time.
+ * They are converted to Unix time with the offset between the `wallTime` and
+ * `timestamp` of requestWillBeSent, and recorded as ISO 8601.
  *
- * CDP の timestamp は単調増加時計 (MonotonicTime) の値であり、Unix 時刻ではない。
- * requestWillBeSent の wallTime との差 (オフセット) で Unix 時刻へ換算して記録する。
- *
- * 内部でリングバッファを使用して、未完了リクエストのメモリ使用量を制限する。
+ * A ring buffer limits the memory used by in-flight requests.
  */
 export class NetworkTracker {
   private readonly storage: SessionStorage
@@ -90,9 +83,9 @@ export class NetworkTracker {
   private readonly pendingRequests = new Map<string, PendingRequest>()
 
   /**
-   * @param storage - セッションストレージ
-   * @param bufferSize - リングバッファの最大サイズ
-   * @param getCurrentOpDir - 現在の操作ディレクトリパスを返す関数。未設定時は null
+   * @param storage - Session storage
+   * @param bufferSize - Maximum size of the ring buffer
+   * @param getCurrentOpDir - Returns the current operation directory path, or null if unset
    */
   constructor(
     storage: SessionStorage,
@@ -105,9 +98,9 @@ export class NetworkTracker {
   }
 
   /**
-   * CDP セッションにネットワーク追跡リスナーを登録する。
-   * Network.enable を送信してドメインを有効化する。
-   * @param cdpSession - 対象の CDPSession
+   * Registers the network tracking listeners on the CDP session.
+   * Sends Network.enable to turn the domain on.
+   * @param cdpSession - Target CDPSession
    */
   async setup(cdpSession: CDPSession): Promise<void> {
     await cdpSession.send('Network.enable', {
@@ -126,11 +119,12 @@ export class NetworkTracker {
         return iso
       }
 
-      // Network.enable 前から進行中のリクエストなどは換算の基準がないため、受信時刻で代替する
+      // No usable time reference (e.g. a request already in flight before
+      // Network.enable, or an invalid wallTime): use the receive time instead
       if (!clock.warned) {
         clock.warned = true
         console.warn(
-          '[NetworkTracker] CDP の時刻基準 (wallTime) が未取得または不正なため、受信時刻で代替します'
+          '[NetworkTracker] The CDP time reference (wallTime) is missing or invalid; using the receive time instead'
         )
       }
       return new Date().toISOString()
@@ -140,7 +134,6 @@ export class NetworkTracker {
       (pending?.owner === clock ? pending.clockOffset : null) ??
       clock.latestOffset
 
-    // リクエスト送信時
     cdpSession.on('Network.requestWillBeSent', (event) => {
       const offset = clockOffsetFromCdp(event.timestamp, event.wallTime)
       if (offset !== null) {
@@ -165,7 +158,7 @@ export class NetworkTracker {
         url: event.request.url,
         method: event.request.method,
         headers: event.request.headers,
-        // postDataEntries (base64) への移行は記録フォーマット互換性に影響するため見送り、非推奨警告のみ抑止する
+        // Migrating to postDataEntries (base64) would change the recorded format, so it is not done; only the deprecation warning is suppressed
         // eslint-disable-next-line @typescript-eslint/no-deprecated
         postData: event.request.postData,
       }
@@ -173,7 +166,6 @@ export class NetworkTracker {
       this.appendToCurrentOp(tracerEvent)
     })
 
-    // レスポンス受信時
     cdpSession.on('Network.responseReceived', (event) => {
       const pending = this.pendingRequests.get(event.requestId)
       const tracerEvent: NetworkResponseEvent = {
@@ -192,7 +184,6 @@ export class NetworkTracker {
       this.appendToCurrentOp(tracerEvent)
     })
 
-    // ロード完了時
     cdpSession.on('Network.loadingFinished', (event) => {
       const pending = this.pendingRequests.get(event.requestId)
       this.pendingRequests.delete(event.requestId)
@@ -211,16 +202,15 @@ export class NetworkTracker {
       this.appendToCurrentOp(tracerEvent)
     })
 
-    // ロード失敗時 (タイムアウト・DNS 解決失敗など)
-    // pendingRequests から削除してリングバッファのスロットを解放する
+    // Not recorded; only frees the ring buffer slot
     cdpSession.on('Network.loadingFailed', (event) => {
       this.pendingRequests.delete(event.requestId)
     })
   }
 
   /**
-   * ネットワークイベントを現在の操作ディレクトリに追記する。
-   * 操作ディレクトリが未設定の場合は破棄する。
+   * Appends a network event to the current operation directory.
+   * Discards it if no operation directory is set.
    */
   private appendToCurrentOp(
     event: NetworkRequestEvent | NetworkResponseEvent | NetworkFinishedEvent
@@ -228,12 +218,12 @@ export class NetworkTracker {
     const opDir = this.getCurrentOpDir()
     if (!opDir) return
     this.storage.appendOpNetwork(opDir, event).catch((error: unknown) => {
-      console.error('[NetworkTracker] ネットワークイベント保存エラー:', error)
+      console.error('[NetworkTracker] Failed to save the network event:', error)
     })
   }
 
   /**
-   * バッファが上限に達している場合、最古のエントリを削除する (リングバッファ)。
+   * Removes the oldest entry if the buffer is full (ring buffer).
    */
   private evictIfFull(): void {
     if (this.pendingRequests.size < this.bufferSize) {
