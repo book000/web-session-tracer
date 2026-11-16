@@ -196,7 +196,7 @@ export class PageTracer {
 
   /**
    * Takes a screenshot and saves it.
-   * On failure it returns undefined instead of interrupting the caller.
+   * On failure it logs a warning and returns undefined instead of interrupting the caller.
    * @param opDir - Operation directory to save into
    * @param phase - When the screenshot is taken (`before` or `after`)
    */
@@ -211,7 +211,11 @@ export class PageTracer {
         phase,
         Buffer.from(buffer)
       )
-    } catch {
+    } catch (error) {
+      console.warn(
+        `[PageTracer] Failed to take the ${phase} screenshot:`,
+        error
+      )
       return undefined
     }
   }

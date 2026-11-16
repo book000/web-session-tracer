@@ -28,8 +28,8 @@ sessions/
         │   ├── event.json
         │   ├── mutations.jsonl
         │   ├── network.jsonl
-        │   ├── before.png               # Screenshot before the click (SCREENSHOT_ENABLED=true only)
-        │   └── after.png                # Screenshot after the click (SCREENSHOT_ENABLED=true only)
+        │   ├── before.png               # Screenshot before the click (SCREENSHOT_ENABLED=true only; absent if the capture fails)
+        │   └── after.png                # Screenshot after the click (SCREENSHOT_ENABLED=true only; absent if the capture fails)
         ├── ev000003-main-keydown/       # Key press
         ├── ev000004-main-input/         # Input value change
         ├── ev000005-main-submit/        # Form submission
@@ -133,8 +133,8 @@ Recorded when the user interacts with the page, captured by DOM event listeners 
 | `className` | string | `class` attribute of the target element. Empty string if absent. |
 | `value` | string | Current value of the element for `input`. Always `""` for `click`, `keydown` and `submit`. Password fields are masked as `"***"`. |
 | `key` | string? | Key name (`keydown` only, e.g. `"Enter"`, `"a"`). Password fields produce `"***"`. |
-| `screenshotBefore` | string? | Path relative to the session directory, e.g. `ops/ev000002-main-click/before.png`. Only for `click` / `submit` with `SCREENSHOT_ENABLED=true`. |
-| `screenshotAfter` | string? | Path relative to the session directory, e.g. `ops/ev000002-main-click/after.png`. Only with `SCREENSHOT_ENABLED=true`. |
+| `screenshotBefore` | string? | Path relative to the session directory, e.g. `ops/ev000002-main-click/before.png`. Only for `click` / `submit` with `SCREENSHOT_ENABLED=true`. Omitted if the capture fails. |
+| `screenshotAfter` | string? | Path relative to the session directory, e.g. `ops/ev000002-main-click/after.png`. Only with `SCREENSHOT_ENABLED=true`. Omitted if the capture fails. |
 
 `click` and `submit` are saved about 500 ms after they happen (and `timestamp` is taken at that time), so that the DOM mutations they cause are recorded in the same directory.
 
@@ -309,7 +309,7 @@ It is typically large. For most analysis tasks, `mutations.jsonl` is more effici
 
 ### `before.png` / `after.png`
 
-PNG screenshots, present only when the tracer was started with `SCREENSHOT_ENABLED=true`.
+PNG screenshots, present only when the tracer was started with `SCREENSHOT_ENABLED=true`. A file can still be absent when the capture fails; the tracer then logs a `[PageTracer] Failed to take the ... screenshot:` warning and keeps recording.
 
 - `before.png`: taken immediately before the action (`click` and `submit` only).
 - `after.png`: taken after the action (all user action types; for `click` / `submit` after the 500 ms wait).
