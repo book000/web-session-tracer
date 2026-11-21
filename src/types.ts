@@ -78,9 +78,12 @@ export interface DomChange {
   removedNodes?: string[]
   /** Name of the changed attribute (attributes only) */
   attributeName?: string
-  /** Attribute value after the change (attributes only; `null` if removed) */
+  /**
+   * Attribute value after the change (attributes only; `null` if removed).
+   * The `value` attribute of a password input is masked as `***`.
+   */
   attributeValue?: string | null
-  /** Value before the change (attributes only) */
+  /** Value before the change (attributes only; masked like `attributeValue`) */
   oldValue?: string | null
   /** Text content (characterData only) */
   characterData?: string

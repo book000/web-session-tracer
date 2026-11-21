@@ -186,8 +186,8 @@ It is absent for operations that produced no DOM mutations (for example, a click
 | `addedNodes` | string[]? | Node names of added children (`childList` only, present only if non-empty). May include `"#text"` and `"#comment"`. |
 | `removedNodes` | string[]? | Node names of removed children (`childList` only, present only if non-empty). |
 | `attributeName` | string? | Name of the changed attribute (`attributes` only). |
-| `attributeValue` | string \| null? | Attribute value after the change (`attributes` only). `null` means the attribute was removed. |
-| `oldValue` | string \| null? | Attribute value before the change (`attributes` only). |
+| `attributeValue` | string \| null? | Attribute value after the change (`attributes` only). `null` means the attribute was removed. The `value` attribute of a password input is masked as `"***"`. |
+| `oldValue` | string \| null? | Attribute value before the change (`attributes` only). The `value` attribute of a password input is masked as `"***"`; `null` (previously absent) is kept. |
 | `characterData` | string? | New text content of the node (`characterData` only). |
 
 #### Mutation significance levels
@@ -301,7 +301,8 @@ Common fields:
 
 A single pretty-printed JSON object: the raw response of the CDP `DOMSnapshot.captureSnapshot` call (with `computedStyles` empty), taken after the operation.
 It is present in every main-frame `navigation` directory, and in the directory of every user action when `FULL_SNAPSHOT_ENABLED=true`.
-It is absent if the capture failed.
+The values of password inputs (both the `value` attribute and the `.value` property in `nodes.inputValue`) are masked as `"***"` before it is written.
+It is absent if the capture or the masking failed.
 
 It is typically large. For most analysis tasks, `mutations.jsonl` is more efficient.
 

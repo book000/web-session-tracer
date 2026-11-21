@@ -10,6 +10,8 @@
  *
  * Security:
  * - The value and key of password fields (`type="password"`) are masked as `***`.
+ * - The old and new `value` attribute of password fields in mutation records
+ *   are masked as `***` as well (`null` is kept).
  *
  * Protection against repeated installation:
  * - The event handlers are kept in `window.__wstHandlers`.
@@ -157,6 +159,16 @@ export function getInjectedScript(): string {
 
   var mutationObserver = new MutationObserver(function (mutations) {
     var changes = mutations.map(function (m) {
+      var isPasswordValue =
+        m.type === 'attributes' &&
+        m.attributeName === 'value' &&
+        m.target &&
+        m.target.tagName === 'INPUT' &&
+        m.target.type === 'password';
+      var attributeValue =
+        m.type === 'attributes' && m.target && m.attributeName
+          ? /** @type {Element} */ (m.target).getAttribute(m.attributeName)
+          : null;
       return {
         mutationType: m.type,
         targetPath: getXPath(/** @type {Element} */ (m.target)),
@@ -168,10 +180,8 @@ export function getInjectedScript(): string {
         }),
         attributeName: m.attributeName,
         attributeValue:
-          m.type === 'attributes' && m.target && m.attributeName
-            ? /** @type {Element} */ (m.target).getAttribute(m.attributeName)
-            : null,
-        oldValue: m.oldValue,
+          isPasswordValue && attributeValue !== null ? '***' : attributeValue,
+        oldValue: isPasswordValue && m.oldValue !== null ? '***' : m.oldValue,
         characterData:
           m.type === 'characterData' ? m.target.textContent : null,
       };

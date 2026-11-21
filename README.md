@@ -9,7 +9,7 @@ A tool that uses Puppeteer to automatically record user operations in a Chrome b
 - **Network traffic**: saves request, response, and finished events per operation
 - **DOM snapshots**: saves the full DOM when the main frame navigates (optionally after every operation)
 - **Screenshots**: optional PNGs before and after operations
-- **Security**: masks the value and key presses of password fields as `***`
+- **Security**: masks the value and key presses of password fields as `***`, including their `value` attribute changes in DOM mutations and their values in DOM snapshots
 - **SPA support**: detects `pushState`-based navigation such as Vue Router and Next.js
 
 > Recorded sessions can contain sensitive page content, request and response bodies, and typed values (only password fields are masked). Keep them private and do not commit them.
