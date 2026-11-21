@@ -13,6 +13,7 @@ import type {
 } from '../types'
 import { computeChangeLevel } from './mutation-level'
 import { NetworkTracker } from './network-tracker'
+import { DRAIN_TIMEOUT_MS, PendingTasks } from './pending-tasks'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -40,6 +41,7 @@ export class PageTracer {
 
   private cdpSession: CDPSession | null = null
   private stopped = false
+  private readonly pending = new PendingTasks()
 
   /**
    * Current operation directory, where network events are written.
@@ -62,11 +64,13 @@ export class PageTracer {
     await this.networkTracker.setup(this.cdpSession)
 
     await this.page
-      .exposeFunction('__wstEvent', (eventDataStr: string): void => {
-        this.handleInjectedEvent(eventDataStr).catch((error: unknown) => {
-          console.error('[PageTracer] Injected event handling error:', error)
-        })
-      })
+      .exposeFunction('__wstEvent', (eventDataStr: string): Promise<void> =>
+        this.pending
+          .track(this.handleInjectedEvent(eventDataStr))
+          .catch((error: unknown) => {
+            console.error('[PageTracer] Injected event handling error:', error)
+          })
+      )
       .catch(() => {
         // Puppeteer throws if __wstEvent is already registered on this page
       })
@@ -81,9 +85,11 @@ export class PageTracer {
     }
 
     this.page.on('framenavigated', (frame: Frame) => {
-      this.handleNavigation(frame).catch((error: unknown) => {
-        console.error('[PageTracer] Navigation handling error:', error)
-      })
+      this.pending
+        .track(this.handleNavigation(frame))
+        .catch((error: unknown) => {
+          console.error('[PageTracer] Navigation handling error:', error)
+        })
     })
 
     // Record the current main frame as the initial navigation
@@ -97,12 +103,16 @@ export class PageTracer {
 
   async stop(): Promise<void> {
     this.stopped = true
-    if (!this.cdpSession) {
-      return
+
+    // Before detaching: captureSnapshot needs the CDP session
+    await this.pending.drain(DRAIN_TIMEOUT_MS)
+
+    if (this.cdpSession) {
+      await this.cdpSession.detach().catch(() => undefined)
+      this.cdpSession = null
     }
 
-    await this.cdpSession.detach().catch(() => undefined)
-    this.cdpSession = null
+    await this.networkTracker.drain(DRAIN_TIMEOUT_MS)
   }
 
   private async handleInjectedEvent(eventDataStr: string): Promise<void> {

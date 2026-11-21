@@ -5,6 +5,7 @@ import type {
   NetworkRequestEvent,
   NetworkResponseEvent,
 } from '../types'
+import { PendingTasks } from './pending-tasks'
 
 /** Largest Unix time (in seconds) that a Date can represent */
 const MAX_EPOCH_SECONDS = 8.64e12
@@ -81,6 +82,7 @@ export class NetworkTracker {
   private readonly bufferSize: number
   private readonly getCurrentOpDir: () => string | null
   private readonly pendingRequests = new Map<string, PendingRequest>()
+  private readonly pending = new PendingTasks()
 
   /**
    * @param storage - Session storage
@@ -217,9 +219,22 @@ export class NetworkTracker {
   ): void {
     const opDir = this.getCurrentOpDir()
     if (!opDir) return
-    this.storage.appendOpNetwork(opDir, event).catch((error: unknown) => {
-      console.error('[NetworkTracker] Failed to save the network event:', error)
-    })
+    this.pending
+      .track(this.storage.appendOpNetwork(opDir, event))
+      .catch((error: unknown) => {
+        console.error(
+          '[NetworkTracker] Failed to save the network event:',
+          error
+        )
+      })
+  }
+
+  /**
+   * Waits for network events that are still being written.
+   * @param timeoutMs - Upper bound of the wait in milliseconds
+   */
+  async drain(timeoutMs: number): Promise<void> {
+    await this.pending.drain(timeoutMs)
   }
 
   /**
