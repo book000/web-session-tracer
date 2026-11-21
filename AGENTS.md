@@ -37,6 +37,7 @@ src/tracer/session-manager.ts  one run = one session; attaches a PageTracer per 
 src/tracer/page-tracer.ts      per-page recording
 src/tracer/network-tracker.ts  collects network events over CDP
 src/tracer/mutation-level.ts   classifies DOM change importance (levels 1 to 3)
+src/tracer/pending-tasks.ts    tracks in-flight writes so shutdown can drain them
 sessions/README.md             schema of the recorded session files
 ```
 
