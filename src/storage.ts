@@ -59,7 +59,13 @@ export class SessionStorage {
     this.assertInitialized()
     const evPart = /ev\d+$/.exec(eventId)?.[0] ?? eventId
     const dirName = `${evPart}-${frameType}-${type}`
-    const opDir = path.join(this.sessionDir, 'ops', dirName)
+    const opsDir = path.join(this.sessionDir, 'ops')
+    const opDir = path.join(opsDir, dirName)
+    if (path.dirname(opDir) !== opsDir || path.basename(opDir) !== dirName) {
+      throw new Error(
+        `Operation directory name "${dirName}" is not a direct child of "${opsDir}"`
+      )
+    }
     await fs.mkdir(opDir, { recursive: true })
     this.opCount++
     return opDir

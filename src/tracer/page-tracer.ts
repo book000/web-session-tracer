@@ -11,11 +11,31 @@ import type {
   RawDomChange,
   UserActionEvent,
 } from '../types'
+import { USER_ACTIONS } from '../types'
 import { computeChangeLevel } from './mutation-level'
 import { NetworkTracker } from './network-tracker'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Checks the fields of an injected user action that end up in a directory name.
+ * @returns A reason naming the offending field and value, or null if valid
+ */
+function validateUserAction(
+  data: Partial<Record<keyof InjectedEvent, unknown>>
+): string | null {
+  if (!(USER_ACTIONS as readonly unknown[]).includes(data.action)) {
+    return `invalid action ${JSON.stringify(data.action)}`
+  }
+  if (
+    data.frameType !== undefined &&
+    !['main', 'iframe'].includes(data.frameType as string)
+  ) {
+    return `invalid frameType ${JSON.stringify(data.frameType)}`
+  }
+  return null
 }
 
 /**
@@ -108,9 +128,9 @@ export class PageTracer {
   private async handleInjectedEvent(eventDataStr: string): Promise<void> {
     if (this.stopped) return
 
-    let data: InjectedEvent
+    let parsed: unknown
     try {
-      data = JSON.parse(eventDataStr) as InjectedEvent
+      parsed = JSON.parse(eventDataStr)
     } catch {
       console.error(
         '[PageTracer] Failed to parse the event JSON:',
@@ -119,9 +139,24 @@ export class PageTracer {
       return
     }
 
-    if (data.type === 'user_action' && data.action) {
+    // The page can call __wstEvent directly, so the payload is untrusted.
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.warn(
+        '[PageTracer] Ignored an invalid injected event: not an object'
+      )
+      return
+    }
+    const raw = parsed as Partial<Record<keyof InjectedEvent, unknown>>
+    const data = parsed as InjectedEvent
+
+    if (raw.type === 'user_action') {
+      const reason = validateUserAction(raw)
+      if (reason) {
+        console.warn('[PageTracer] Ignored an invalid injected event:', reason)
+        return
+      }
       await this.saveUserAction(data)
-    } else if (data.type === 'mutation' && data.changes) {
+    } else if (raw.type === 'mutation' && data.changes) {
       await this.saveMutation(data.changes)
     }
   }

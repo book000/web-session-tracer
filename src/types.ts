@@ -25,13 +25,17 @@ export interface BaseTracerEvent {
   timestamp: string
 }
 
+export const USER_ACTIONS = ['click', 'keydown', 'input', 'submit'] as const
+
+export type UserAction = (typeof USER_ACTIONS)[number]
+
 /**
  * User action event: a click, key press, or form interaction.
  * Saved as pretty-printed JSON in `ops/<evNNNNNN>-<frameType>-<action>/event.json`.
  */
 export interface UserActionEvent extends BaseTracerEvent {
   type: 'user_action'
-  action: 'click' | 'keydown' | 'input' | 'submit'
+  action: UserAction
   tagName: string
   elementId: string
   className: string
@@ -164,7 +168,7 @@ export interface InjectedEvent {
   /** Frame the event came from (`main`: main frame, `iframe`: subframe) */
   frameType?: 'main' | 'iframe'
   /** Kind of user action (user_action only) */
-  action?: 'click' | 'keydown' | 'input' | 'submit'
+  action?: UserAction
   tagName?: string
   elementId?: string
   className?: string
